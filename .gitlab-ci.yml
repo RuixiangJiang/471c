@@ -7,6 +7,7 @@ variables:
 
 stages:
   - pre-commit
+  - test
 
 pre-commit-check:
   stage: pre-commit
@@ -20,3 +21,22 @@ pre-commit-check:
   script:
     - uv sync --all-extras
     - uv run pre-commit run --all-files
+
+pytest:
+  stage: test
+  image: ghcr.io/astral-sh/uv:$UV_VERSION-python$PYTHON_VERSION-$BASE_LAYER
+  cache:
+    key:
+      files:
+        - uv.lock
+    paths:
+      - $UV_CACHE_DIR
+  script:
+    - uv sync --all-extras
+    - uv run pytest
+  artifacts:
+    reports:
+      junit: reports/test.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: reports/coverage.xml

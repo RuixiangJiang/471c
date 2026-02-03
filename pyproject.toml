@@ -7,7 +7,14 @@ readme = "README.md"
 requires-python = ">=3.14"
 
 [dependency-groups]
-dev = ["pre-commit>=4.5.1", "ruff>=0.14.2"]
+dev = [
+    "pre-commit>=4.5.1",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "pytest-html>=4.2.0",
+    "pytest-sugar>=1.1.1",
+    "ruff>=0.14.2",
+]
 
 [tool.ruff]
 line-length = 120
@@ -21,3 +28,19 @@ L1 = { workspace = true }
 L2 = { workspace = true }
 L3 = { workspace = true }
 util = { workspace = true }
+
+[tool.pytest.ini_options]
+addopts = [
+    "--import-mode=importlib",
+    "--junitxml=reports/test.xml",
+    "--html=reports/pytest_html/index.html",
+    "--self-contained-html",
+    "--cov",
+    "--cov-branch",
+    "--cov-report=term",
+    "--cov-report=html:reports/coverage_html",
+    "--cov-report=xml:reports/coverage.xml",
+]
+
+[tool.coverage.run]
+omit = ["**/__init__.py", "**/test/**"]

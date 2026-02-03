@@ -6,3 +6,6 @@ readme = "README.md"
 authors = [{ name = "James Clause", email = "clause@udel.edu" }]
 requires-python = ">=3.14"
 dependencies = ["pydantic>=2.12.3", "util"]
+
+[dependency-groups]
+dev = ["pytest>=9.0.2"]
