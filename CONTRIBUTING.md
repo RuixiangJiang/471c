@@ -15,11 +15,13 @@ We use UV for dependency management, running tests, and pre-commit hooks.
 
 2. Click the **Fork** button at the top-right of the page.
 
-3. Choose your personal namespace or group for the fork.
+3. Choose your personal namespace or group for the fork. Make sure the fork has private visibility.
 
-4. After forking, clone your fork locally either via command line or by using your preferred IDE.
+4. Add `clause@udel.edu` and `wahid@udel.edu` as project members with the developer role.
 
-5. Update the badge URLs in README.md by replacing `clause` with `<NAMESPACE>` and `471c` with `<PROJECT>`
+5. Clone your fork locally either via command line or by using your preferred IDE.
+
+6. Update the badge URLs in README.md by replacing `clause` with `<NAMESPACE>` and `471c` with `<PROJECT>`
 
 ## Install project dependencies
 
@@ -35,11 +37,11 @@ uv run pre-commit run --all-files
 uv run pytest
 ```
 
-## Code Formatting & Style Requirements
+# Code Formatting & Style Requirements
 
 To keep the codebase consistent and maintainable, please follow these formatting rules:
 
-### Python Style
+## Python Style
 
 We use ruff (via UV) to enforce code style and linting rules: See pyproject.toml for the configuration. A pre-commit hook runs ruff automatically and will prevent commits of poor quality code. You can have ruff automatically fix issues by running the following from the project root.
 
@@ -59,7 +61,7 @@ Type annotations are required for all functions, methods, and class attributes w
 
 - Better editor/IDE support (autocomplete, linting, refactoring)
 
-## Testing & Coverage
+# Testing & Coverage
 
 All contributions must be tested and tests must be executable via `uv run pytest`. Code coverage is reported and 100% branch coverage is expected. Pragmas may be used to work around tool limitations (e.g., `#pragma: no branch` with `match`) but other adjustments should onlt be used as a last effort and must be clearly explained.
 
