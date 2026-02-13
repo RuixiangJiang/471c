@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field
 
 type Identifier = Annotated[str, Field(min_length=1)]
+type Nat = Annotated[int, Field(ge=0)]
 
 
 class Program(BaseModel, frozen=True):
@@ -36,7 +37,7 @@ class Abstract(BaseModel, frozen=True):
 class Apply(BaseModel, frozen=True):
     tag: Literal["apply"] = "apply"
     target: Identifier
-    arguments: Sequence[str]
+    arguments: Sequence[Identifier]
 
 
 class Immediate(BaseModel, frozen=True):
@@ -67,7 +68,7 @@ class Branch(BaseModel, frozen=True):
 class Allocate(BaseModel, frozen=True):
     tag: Literal["allocate"] = "allocate"
     destination: Identifier
-    count: Annotated[int, Field(ge=0)]
+    count: Nat
     then: Statement
 
 
@@ -75,14 +76,14 @@ class Load(BaseModel, frozen=True):
     tag: Literal["load"] = "load"
     destination: Identifier
     base: Identifier
-    index: Annotated[int, Field(ge=0)]
+    index: Nat
     then: Statement
 
 
 class Store(BaseModel, frozen=True):
     tag: Literal["store"] = "store"
     base: Identifier
-    index: Annotated[int, Field(ge=0)]
+    index: Nat
     value: Identifier
     then: Statement
 
