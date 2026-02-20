@@ -214,7 +214,7 @@ def test_abstract_duplicate_param_raises() -> None:
     )
 
     with pytest.raises(ValueError):
-        check_term(term, context)
+        check_term(term, context＝{})
 
 
 @pytest.mark.skip
