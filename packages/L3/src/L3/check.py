@@ -1,6 +1,5 @@
 from collections import Counter
 from collections.abc import Mapping
-from functools import partial
 
 from .syntax import (
     Abstract,
