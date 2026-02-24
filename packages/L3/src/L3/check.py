@@ -47,7 +47,8 @@ def check_term(
     - Structural recursion: recursively visits sub-terms to ensure checks apply everywhere.
     - `recur` is a convenience wrapper that reuses the same `context`.
     """
-    recur = partial(check_term, context=context)
+    def recur(t: Term, *, ctx: Context = context) -> None:
+        check_term(t, ctx)
 
     match term:
         case Let(bindings=bindings, body=body):
@@ -56,11 +57,12 @@ def check_term(
             if duplicates:
                 raise ValueError(f"duplicate binders: {duplicates}")
 
+            # parallel let: each RHS sees only the incoming context
             for _, value in bindings:
-                recur(value)
+                recur(value, ctx=context)
 
-            local = dict.fromkeys([name for name, _ in bindings])
-            recur(body, context={**context, **local})
+            local = dict.fromkeys([name for name, _ in bindings], None)
+            recur(body, ctx={**context, **local})
 
         case LetRec(bindings=bindings, body=body):
             counts = Counter(name for name, _ in bindings)
@@ -68,12 +70,13 @@ def check_term(
             if duplicates:
                 raise ValueError(f"duplicate binders: {duplicates}")
 
-            local = dict.fromkeys([name for name, _ in bindings])
+            local = dict.fromkeys([name for name, _ in bindings], None)
 
-            for name, value in bindings:
-                recur(value, context={**context, **local})
+            # letrec RHS sees all binders
+            for _name, value in bindings:
+                recur(value, ctx={**context, **local})
 
-            check_term(body, {**context, **local})
+            recur(body, ctx={**context, **local})
 
         case Reference(name=name):
             if name not in context:
@@ -86,40 +89,40 @@ def check_term(
                 raise ValueError(f"duplicate parameters: {duplicates}")
 
             local = dict.fromkeys(parameters, None)
-            recur(body, context={**context, **local})
+            recur(body, ctx={**context, **local})
 
         case Apply(target=target, arguments=arguments):
-            recur(target)
+            recur(target, ctx=context)
             for argument in arguments:
-                recur(argument)
+                recur(argument, ctx=context)
 
         case Immediate(value=_value):
-            pass
+            return
 
         case Primitive(operator=_operator, left=left, right=right):
-            recur(left)
-            recur(right)
+            recur(left, ctx=context)
+            recur(right, ctx=context)
 
         case Branch(operator=_operator, left=left, right=right, consequent=consequent, otherwise=otherwise):
-            recur(left)
-            recur(right)
-            recur(consequent)
-            recur(otherwise)
+            recur(left, ctx=context)
+            recur(right, ctx=context)
+            recur(consequent, ctx=context)
+            recur(otherwise, ctx=context)
 
         case Allocate(count=_count):
-            pass
+            return
 
         case Load(base=base, index=_index):
-            recur(base)
+            recur(base, ctx=context)
 
         case Store(base=base, index=_index, value=value):
-            recur(base)
-            recur(value)
+            recur(base, ctx=context)
+            recur(value, ctx=context)
 
         case Begin(effects=effects, value=value):  # pragma: no branch
             for effect in effects:
-                recur(effect)
-            recur(value)
+                recur(effect, ctx=context)
+            recur(value, ctx=context)
 
 
 def check_program(
