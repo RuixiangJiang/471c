@@ -3,28 +3,57 @@ parameters  : IDENTIFIER*
 
 term        : let
             | letrec
-            | reference
             | abstract
-            | apply
-            | immediate
-            | primitive
             | branch
+            | primitive
             | allocate
             | load
             | store
             | begin
-
+            | apply
+            | immediate
+            | reference
 
 let         : "(" LET "(" bindings ")" term ")"
-
 letrec      : "(" LETREC "(" bindings ")" term ")"
 
 bindings    : binding*
-binding     : IDENTIFIER term
+binding     : "(" IDENTIFIER term ")"
+
+reference   : IDENTIFIER
+
+abstract    : "(" LAMBDA "(" parameters ")" term ")"
+
+branch      : "(" IF condition term term ")"
+condition   : "(" CMP term term ")"
+
+primitive   : "(" OP term term ")"
+
+allocate    : "(" ALLOCATE INT ")"
+load        : "(" LOAD term INT ")"
+store       : "(" STORE term INT term ")"
+
+begin       : "(" BEGIN term+ ")"
+
+apply       : "(" term term* ")"
+
+immediate   : INT
 
 PROGRAM.2   : "l3"
 LET.2       : "let"
 LETREC.2    : "letrec"
+IF.2        : "if"
+ALLOCATE.2  : "allocate"
+LOAD.2      : "load"
+STORE.2     : "store"
+BEGIN.2     : "begin"
 LAMBDA.2    : "\\" | "lambda" | "λ"
 
+OP          : "+" | "-" | "*"
+CMP         : "<" | "=="
+
+INT         : /[0-9]+/
 IDENTIFIER  : /[a-zA-Z_][a-zA-Z0-9_]*/
+
+%import common.WS
+%ignore WS
