@@ -1,299 +1,237 @@
 import pytest
-
 from L2 import syntax as L2
 from L3 import syntax as L3
 from L3.eliminate_letrec import Context, eliminate_letrec_program, eliminate_letrec_term
 
 
-def test_eliminate_letrec_term_let() -> None:
+def test_eliminate_letrec_term_let():
     term = L3.Let(
-        bindings=[("x", L3.Immediate(value=0))],
+        bindings=[("x", L3.Reference(name="x"))],
+        body=L3.Reference(name="y"),
+    )
+
+    context: Context = {}
+    actual = eliminate_letrec_term(term, context)
+
+    expected = L2.Let(
+        bindings=[("x", L2.Reference(name="x"))],
+        body=L2.Reference(name="y"),
+    )
+
+    assert actual == expected
+
+
+def test_eliminate_letrec_term_letrec():
+    term = L3.LetRec(
+        bindings=[("x", L3.Reference(name="y"))],
+        body=L3.Reference(name="z"),
+    )
+
+    context: Context = {}
+    actual = eliminate_letrec_term(term, context)
+
+    expected = L2.Let(
+        bindings=[("x", L2.Allocate(count=1))],
+        body=L2.Begin(
+            effects=[
+                L2.Store(
+                    base=L2.Reference(name="x"),
+                    index=0,
+                    value=L2.Reference(name="y"),
+                )
+            ],
+            value=L2.Reference(name="z"),
+        ),
+    )
+
+    assert actual == expected
+
+
+def test_eliminate_letrec_term_reference_value():
+    term = L3.Reference(name="x")
+
+    context: Context = {}
+    actual = eliminate_letrec_term(term, context)
+
+    expected = L2.Reference(name="x")
+
+    assert actual == expected
+
+
+def test_eliminate_letrec_term_reference_variable():
+    term = L3.Reference(name="x")
+
+    context: Context = {"x": None}
+    actual = eliminate_letrec_term(term, context)
+
+    expected = L2.Load(base=L2.Reference(name="x"), index=0)
+
+    assert actual == expected
+
+
+def test_eliminate_letrec_term_abstract():
+    term = L3.Abstract(
+        parameters=["x"],
         body=L3.Reference(name="x"),
     )
 
     context: Context = {}
-
-    expected = L2.Let(
-        bindings=[("x", L2.Immediate(value=0))],
-        body=L2.Reference(name="x"),
-    )
-
-    match term:
-        case L3.Let():
-            actual = eliminate_letrec_term(term, context)
-            assert actual == expected
-
-
-def test_eliminate_letrec_term_letrec() -> None:
-    term = L3.LetRec(
-        bindings=[
-            (
-                "f",
-                L3.Abstract(
-                    parameters=["x"],
-                    body=L3.Apply(
-                        target=L3.Reference(name="f"),
-                        arguments=[L3.Reference(name="x")],
-                    ),
-                ),
-            )
-        ],
-        body=L3.Apply(
-            target=L3.Reference(name="f"),
-            arguments=[L3.Immediate(value=0)],
-        ),
-    )
-
-    context: Context = {}
-
-    expected = L2.Let(
-        bindings=[("f", L2.Allocate(count=1))],
-        body=L2.Begin(
-            effects=[
-                L2.Store(
-                    base=L2.Reference(name="f"),
-                    index=0,
-                    value=L2.Abstract(
-                        parameters=["x"],
-                        body=L2.Apply(
-                            target=L2.Load(base=L2.Reference(name="f"), index=0),
-                            arguments=[L2.Reference(name="x")],
-                        ),
-                    ),
-                ),
-            ],
-            value=L2.Apply(
-                target=L2.Load(base=L2.Reference(name="f"), index=0),
-                arguments=[L2.Immediate(value=0)],
-            ),
-        ),
-    )
-
-    match term:
-        case L3.LetRec():
-            actual = eliminate_letrec_term(term, context)
-            assert actual == expected
-
-
-def test_eliminate_letrec_term_reference_nonrecursive() -> None:
-    term = L3.Reference(name="x")
-
-    context: Context = {}
-
-    expected = L2.Reference(name="x")
-
-    match term:
-        case L3.Reference():
-            actual = eliminate_letrec_term(term, context)
-            assert actual == expected
-
-
-def test_eliminate_letrec_term_reference_recursive() -> None:
-    term = L3.Reference(name="f")
-
-    context: Context = {"f": None}
-
-    expected = L2.Load(
-        base=L2.Reference(name="f"),
-        index=0,
-    )
-
-    match term:
-        case L3.Reference():
-            actual = eliminate_letrec_term(term, context)
-            assert actual == expected
-
-
-def test_eliminate_letrec_term_abstract() -> None:
-    term = L3.Abstract(
-        parameters=["x"],
-        body=L3.Reference(name="f"),
-    )
-
-    context: Context = {"f": None}
+    actual = eliminate_letrec_term(term, context)
 
     expected = L2.Abstract(
         parameters=["x"],
-        body=L2.Load(base=L2.Reference(name="f"), index=0),
+        body=L2.Reference(name="x"),
     )
 
-    match term:
-        case L3.Abstract():
-            actual = eliminate_letrec_term(term, context)
-            assert actual == expected
+    assert actual == expected
 
 
-def test_eliminate_letrec_term_apply() -> None:
+def test_eliminate_letrec_term_apply():
     term = L3.Apply(
-        target=L3.Reference(name="g"),
-        arguments=[L3.Reference(name="f")],
+        target=L3.Reference(name="x"),
+        arguments=[],
     )
-
-    context: Context = {"f": None}
-
-    expected = L2.Apply(
-        target=L2.Reference(name="g"),
-        arguments=[L2.Load(base=L2.Reference(name="f"), index=0)],
-    )
-
-    match term:
-        case L3.Apply():
-            actual = eliminate_letrec_term(term, context)
-            assert actual == expected
-
-
-def test_eliminate_letrec_term_immediate() -> None:
-    term = L3.Immediate(value=7)
 
     context: Context = {}
+    actual = eliminate_letrec_term(term, context)
 
-    expected = L2.Immediate(value=7)
-
-    match term:
-        case L3.Immediate():
-            actual = eliminate_letrec_term(term, context)
-            assert actual == expected
-
-
-def test_eliminate_letrec_term_primitive() -> None:
-    term = L3.Primitive(
-        operator="+",
-        left=L3.Reference(name="f"),
-        right=L3.Immediate(value=1),
+    expected = L2.Apply(
+        target=L2.Reference(name="x"),
+        arguments=[],
     )
 
-    context: Context = {"f": None}
+    assert actual == expected
+
+
+def test_eliminate_letrec_term_immediate():
+    term = L3.Immediate(value=0)
+
+    context: Context = {}
+    actual = eliminate_letrec_term(term, context)
+
+    expected = L2.Immediate(value=0)
+
+    assert actual == expected
+
+
+def test_eliminate_letrec_term_primitive():
+    term = L3.Primitive(
+        operator="+",
+        left=L3.Reference(name="x"),
+        right=L3.Reference(name="y"),
+    )
+
+    context: Context = {}
+    actual = eliminate_letrec_term(term, context)
 
     expected = L2.Primitive(
         operator="+",
-        left=L2.Load(base=L2.Reference(name="f"), index=0),
-        right=L2.Immediate(value=1),
+        left=L2.Reference(name="x"),
+        right=L2.Reference(name="y"),
     )
 
-    match term:
-        case L3.Primitive():
-            actual = eliminate_letrec_term(term, context)
-            assert actual == expected
+    assert actual == expected
 
 
-def test_eliminate_letrec_term_branch() -> None:
+def test_eliminate_letrec_term_branch():
     term = L3.Branch(
         operator="<",
-        left=L3.Reference(name="f"),
-        right=L3.Immediate(value=2),
-        consequent=L3.Immediate(value=1),
-        otherwise=L3.Immediate(value=0),
+        left=L3.Reference(name="w"),
+        right=L3.Reference(name="x"),
+        consequent=L3.Reference(name="y"),
+        otherwise=L3.Reference(name="z"),
     )
 
-    context: Context = {"f": None}
+    context: Context = {}
+    actual = eliminate_letrec_term(term, context)
 
     expected = L2.Branch(
         operator="<",
-        left=L2.Load(base=L2.Reference(name="f"), index=0),
-        right=L2.Immediate(value=2),
-        consequent=L2.Immediate(value=1),
-        otherwise=L2.Immediate(value=0),
+        left=L2.Reference(name="w"),
+        right=L2.Reference(name="x"),
+        consequent=L2.Reference(name="y"),
+        otherwise=L2.Reference(name="z"),
     )
 
-    match term:
-        case L3.Branch():
-            actual = eliminate_letrec_term(term, context)
-            assert actual == expected
+    assert actual == expected
 
 
-def test_eliminate_letrec_term_allocate() -> None:
+def test_eliminate_letrec_term_allocate():
     term = L3.Allocate(count=3)
 
     context: Context = {}
+    actual = eliminate_letrec_term(term, context)
 
     expected = L2.Allocate(count=3)
 
-    match term:
-        case L3.Allocate():
-            actual = eliminate_letrec_term(term, context)
-            assert actual == expected
+    assert actual == expected
 
 
-def test_eliminate_letrec_term_load() -> None:
+def test_eliminate_letrec_term_load():
     term = L3.Load(
-        base=L3.Allocate(count=1),
+        base=L3.Reference(name="x"),
         index=0,
     )
 
     context: Context = {}
+    actual = eliminate_letrec_term(term, context)
 
     expected = L2.Load(
-        base=L2.Allocate(count=1),
+        base=L2.Reference(name="x"),
         index=0,
     )
 
-    match term:
-        case L3.Load():
-            actual = eliminate_letrec_term(term, context)
-            assert actual == expected
+    assert actual == expected
 
 
-def test_eliminate_letrec_term_store() -> None:
+def test_eliminate_letrec_term_store():
     term = L3.Store(
-        base=L3.Allocate(count=1),
+        base=L3.Reference(name="x"),
         index=0,
-        value=L3.Reference(name="f"),
+        value=L3.Reference(name="y"),
     )
 
-    context: Context = {"f": None}
+    context: Context = {}
+    actual = eliminate_letrec_term(term, context)
 
     expected = L2.Store(
-        base=L2.Allocate(count=1),
+        base=L2.Reference(name="x"),
         index=0,
-        value=L2.Load(base=L2.Reference(name="f"), index=0),
+        value=L2.Reference(name="y"),
     )
 
-    match term:
-        case L3.Store():
-            actual = eliminate_letrec_term(term, context)
-            assert actual == expected
+    assert actual == expected
 
 
-def test_eliminate_letrec_term_begin() -> None:
+def test_eliminate_letrec_term_begin():
     term = L3.Begin(
-        effects=[L3.Reference(name="f")],
-        value=L3.Immediate(value=0),
+        effects=[],
+        value=L3.Reference(name="x"),
     )
+
+    context: Context = {}
+    actual = eliminate_letrec_term(term, context)
+
+    expected = L2.Begin(
+        effects=[],
+        value=L2.Reference(name="x"),
+    )
+
+    assert actual == expected
 
     context: Context = {"f": None}
 
-    expected = L2.Begin(
-        effects=[L2.Load(base=L2.Reference(name="f"), index=0)],
-        value=L2.Immediate(value=0),
-    )
-
-    match term:
-        case L3.Begin():  # pragma: no branch
-            actual = eliminate_letrec_term(term, context)
-            assert actual == expected
-
-
-def test_eliminate_letrec_term_unhandled_raises() -> None:
-    term = object()
-
-    match term:
-        case _:
-            with pytest.raises(TypeError):
-                eliminate_letrec_term(term, context={})  # type: ignore[arg-type]
-
-
-def test_eliminate_letrec_program() -> None:
+def test_eliminate_letrec_program():
     program = L3.Program(
         parameters=["x"],
-        body=L3.Immediate(value=0),
+        body=L3.Reference(name="x"),
     )
+
+    actual = eliminate_letrec_program(program)
 
     expected = L2.Program(
         parameters=["x"],
-        body=L2.Immediate(value=0),
+        body=L2.Reference(name="x"),
     )
 
-    match program:
-        case L3.Program():  # pragma: no branch
-            actual = eliminate_letrec_program(program)
-            assert actual == expected
+    assert actual == expected
