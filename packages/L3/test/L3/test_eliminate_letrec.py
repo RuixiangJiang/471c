@@ -1,4 +1,3 @@
-import pytest
 from L2 import syntax as L2
 from L3 import syntax as L3
 from L3.eliminate_letrec import Context, eliminate_letrec_program, eliminate_letrec_term
