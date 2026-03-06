@@ -1,3 +1,4 @@
+import pytest
 from L2 import syntax as L2
 from L3 import syntax as L3
 from L3.eliminate_letrec import Context, eliminate_letrec_program, eliminate_letrec_term
@@ -218,6 +219,7 @@ def test_eliminate_letrec_term_begin():
 
     assert actual == expected
 
+    context: Context = {"f": None}
 
 def test_eliminate_letrec_program():
     program = L3.Program(
