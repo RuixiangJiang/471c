@@ -1,3 +1,4 @@
+import pytest
 from L1 import syntax as L1
 from L2 import syntax as L2
 from L2.cps_convert import cps_convert_program, cps_convert_term
@@ -245,3 +246,9 @@ def test_cps_convert_program():
     )
 
     assert actual == expected
+
+def test_cps_convert_term_invalid_term_raises_type_error():
+    fresh = SequentialNameGenerator()
+
+    with pytest.raises(TypeError, match="Unhandled L2 term in cps_convert_term"):
+        cps_convert_term("not a term", k, fresh)
