@@ -1,7 +1,12 @@
-L1 provides a language that executed each sentence in the order given by `then` statement. It has the following statements:
-- Immediate: to assign a constant to a variable
-- Primitive: to compute `left` `op` `right`
-- Branch: to jump between statements
-- Halt: to end the execution of the whole program
+The language is structured like a tree where the type Program is the root. The direction of execution goes from top to down, or root to leaves. Sequence type represents a collection of things. Program expects a sequence of identifiers, and a body that is of type Statement.
 
-Comparing to L2, L1 is at the lower level, replacing nested expressions with explicit sequences.
+There is a generalized type called Statement that represents a union of types and employs the tag field for type resolution. Statement type is used heavily among all types and enables the types to recursively include one another. Through using the generalized type Statement, many more concrete types can be passed to each other as parameters.
+
+Another important type is Identifier which is a non empty string. Identifier is used for type fields that we no longer want to extend. From the name itself, it should be unique at least locally. It is used as Program's parameter sequence, and as reference in multiple types with the field destination and target usually.
+
+Branch type is used for control statements like switch and if. In L1, equals and less than operators are supported. Primitive type is used for operators like addition and multiplication and has a clear distinction between left and right terms. Differently to L2 however, Primitive type in L1 has a then field that is used to link the next statement.
+
+Abstract type is for function definitions, where arguments must be a sequence of Identifiers. The body part of Abstract is where the actual implementation goes. Differently to L2, L1 Abstract type has destination and then fields too. Then field is for tieing in the next Statement type. Destination field is a reference in most of the types. This field is used to store the result to a given reference. Apply type is used to actually call a function. There is no Reference type in L1 unlike L2. Destination field and passing of the references with identifiers is the way L1 implements scope and context. Scope, or context was defined with Let type in L2. In L1, we do not have this type but instead we have destination fields. Allocate, Load, Store types are used for saving and retrieving information.
+
+Additionally to L2, L1 has Halt type. Halt type is used to simply load and return a given value reference.
+Compared to L2, L1 replaced Term type with Statement type. There is no longer Reference and Let types in L1 so the context feature of L2 is no longer present here.

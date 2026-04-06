@@ -16,112 +16,102 @@ def cps_convert_term(
 
     match term:
         case L2.Let(bindings=bindings, body=body):
-            def convert_bindings(
-                bindings: Sequence[tuple[L2.Identifier, L2.Term]],
-            ) -> L1.Statement:
-                match bindings:
-                    case []:
-                        return _term(body, k)
-
-                    case [(name, value), *rest]:
-                        return _term(
-                            value,
-                            lambda source: L1.Copy(
-                                destination=name,
-                                source=source,
-                                then=convert_bindings(rest),
-                            ),
-                        )
-
-                    case _:  # pragma: no cover
-                        raise ValueError(bindings)
-
-            return convert_bindings(bindings)
+            if len(bindings) == 0:
+                return _term(body, k)
+            binding, t = bindings[0]
+            return _term(
+                t,
+                lambda x: L1.Copy(
+                    destination=binding, source=x, then=_term(L2.Let(bindings=bindings[1:], body=body), k)
+                ),
+            )
 
         case L2.Reference(name=name):
             return k(name)
 
         case L2.Abstract(parameters=parameters, body=body):
-            destination = fresh("t")
-            continuation = fresh("k")
+            new_identifier = fresh("t")
+            abstract_identifier = fresh("k")
             return L1.Abstract(
-                destination=destination,
-                parameters=[*parameters, continuation],
-                body=_term(
-                    body,
-                    lambda value: L1.Apply(
-                        target=continuation,
-                        arguments=[value],
-                    ),
-                ),
-                then=k(destination),
+                destination=new_identifier,
+                parameters=parameters + [abstract_identifier],
+                body=_term(body, lambda bo: L1.Apply(target=abstract_identifier, arguments=[bo])),
+                then=k(new_identifier),
             )
 
         case L2.Apply(target=target, arguments=arguments):
-            continuation = fresh("k")
-            result = fresh("t")
-            return L1.Abstract(
-                destination=continuation,
-                parameters=[result],
-                body=k(result),
-                then=_term(
-                    target,
-                    lambda target: _terms(
-                        arguments,
-                        lambda arguments: L1.Apply(
-                            target=target,
-                            arguments=[*arguments, continuation],
+            new_identifier = fresh("t")
+            abstract_identifier = fresh("k")
+            return _term(
+                target,
+                lambda tar: _terms(
+                    arguments,
+                    lambda args: L1.Abstract(
+                        destination=abstract_identifier,
+                        parameters=[new_identifier],
+                        body=k(new_identifier),
+                        then=L1.Apply(
+                            target=tar,
+                            arguments=args + [abstract_identifier],
                         ),
                     ),
                 ),
             )
 
         case L2.Immediate(value=value):
-            destination = fresh("t")
+            new_identifier = fresh("t")
             return L1.Immediate(
-                destination=destination,
+                destination=new_identifier,
                 value=value,
-                then=k(destination),
+                then=k(new_identifier),
             )
 
         case L2.Primitive(operator=operator, left=left, right=right):
-            destination = fresh("t")
-            return _terms(
-                [left, right],
-                lambda values: L1.Primitive(
-                    destination=destination,
-                    operator=operator,
-                    left=values[0],
-                    right=values[1],
-                    then=k(destination),
+            new_identifier = fresh("t")
+            return _term(
+                left,
+                lambda le: _term(
+                    right,
+                    lambda ri: L1.Primitive(
+                        destination=new_identifier,
+                        operator=operator,
+                        left=le,
+                        right=ri,
+                        then=k(new_identifier),
+                    ),
                 ),
             )
 
         case L2.Branch(operator=operator, left=left, right=right, consequent=consequent, otherwise=otherwise):
-            join = fresh("j")
-            result = fresh("t")
-            return L1.Abstract(
-                destination=join,
-                parameters=[result],
-                body=k(result),
-                then=_terms(
-                    [left, right],
-                    lambda values: L1.Branch(
-                        operator=operator,
-                        left=values[0],
-                        right=values[1],
-                        then=_term(
-                            consequent,
-                            lambda value: L1.Apply(
-                                target=join,
-                                arguments=[value],
+            main_id = fresh("j")
+            new_identifier = fresh("t")
+            return _term(
+                left,
+                lambda le: _term(
+                    right,
+                    lambda ri: L1.Abstract(
+                        destination=main_id,
+                        parameters=[new_identifier],
+                        body=k(new_identifier),
+                        then=L1.Branch(
+                            operator=operator,
+                            left=le,
+                            right=ri,
+                            then=_term(
+                                consequent,
+                                lambda con: L1.Apply(
+                                    target=main_id,
+                                    arguments=[
+                                        con,
+                                    ],
+                                ),
                             ),
-                        ),
-                        otherwise=_term(
-                            otherwise,
-                            lambda value: L1.Apply(
-                                target=join,
-                                arguments=[value],
+                            otherwise=_term(
+                                otherwise,
+                                lambda oth: L1.Apply(
+                                    target=main_id,
+                                    arguments=[oth],
+                                ),
                             ),
                         ),
                     ),
@@ -129,57 +119,44 @@ def cps_convert_term(
             )
 
         case L2.Allocate(count=count):
-            destination = fresh("t")
-            return L1.Allocate(
-                destination=destination,
-                count=count,
-                then=k(destination),
-            )
+            new_identifier = fresh("t")
+            return L1.Allocate(destination=new_identifier, count=count, then=k(new_identifier))
 
         case L2.Load(base=base, index=index):
-            destination = fresh("t")
+            new_identifier = fresh("t")
             return _term(
                 base,
-                lambda base: L1.Load(
-                    destination=destination,
-                    base=base,
+                lambda x: L1.Load(
+                    destination=new_identifier,
+                    base=x,
                     index=index,
-                    then=k(destination),
+                    then=k(new_identifier),
                 ),
             )
 
         case L2.Store(base=base, index=index, value=value):
-            result = fresh("t")
-            return _terms(
-                [base, value],
-                lambda values: L1.Store(
-                    base=values[0],
-                    index=index,
-                    value=values[1],
-                    then=L1.Immediate(
-                        destination=result,
-                        value=0,
-                        then=k(result),
+            immediate_id = fresh("t")
+            return _term(
+                base,
+                lambda ba: _term(
+                    value,
+                    lambda val: L1.Store(
+                        base=ba,
+                        index=index,
+                        value=val,
+                        then=L1.Immediate(
+                            destination=immediate_id,
+                            value=0,
+                            then=k(immediate_id),
+                        ),
                     ),
                 ),
             )
 
         case L2.Begin(effects=effects, value=value):  # pragma: no branch
-            def convert_effects(effects: Sequence[L2.Term]) -> L1.Statement:
-                match effects:
-                    case []:
-                        return _term(value, k)
-
-                    case [first, *rest]:
-                        return _term(first, lambda _: convert_effects(rest))
-
-                    case _:  # pragma: no cover
-                        raise ValueError(effects)
-
-            return convert_effects(effects)
-
-        case _:
-            raise TypeError(f"Unhandled L2 term in cps_convert_term: {term!r}")
+            if len(effects) == 0:
+                return _term(value, k)
+            return _term(effects[0], lambda _: _term(L2.Begin(effects=effects[1:], value=value), k))
 
 
 def cps_convert_terms(

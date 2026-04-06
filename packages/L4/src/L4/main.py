@@ -4,11 +4,11 @@ import click
 from L1.to_python import to_ast_program
 from L2.cps_convert import cps_convert_program
 from L2.optimize import optimize_program
+from L3.check import check_program
+from L3.eliminate_letrec import eliminate_letrec_program
+from L3.uniqify import uniqify_program
 
-from .check import check_program
-from .eliminate_letrec import eliminate_letrec_program
-from .parse import parse_program
-from .uniqify import uniqify_program
+from L4.convert import convert_to_l3, dummy_parse
 
 
 @click.command(
@@ -46,7 +46,8 @@ def main(
     optimize: bool,
     input: Path,
 ) -> None:
-    l3 = parse_program(input.read_text())
+    l4 = dummy_parse(input.read_text())
+    l3 = convert_to_l3(l4)
 
     if check:
         check_program(l3)

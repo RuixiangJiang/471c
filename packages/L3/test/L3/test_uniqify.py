@@ -1,20 +1,19 @@
-import pytest
 from L3.syntax import (
-    Abstract,
-    Allocate,
     Apply,
-    Begin,
-    Branch,
     Immediate,
     Let,
-    LetRec,
-    Load,
-    Primitive,
-    Program,
     Reference,
+    LetRec,
+    Allocate,
+    Primitive,
+    Begin,
+    Branch,
+    Abstract,
     Store,
+    Load,
+    Program,
 )
-from L3.uniqify import Context, uniqify_program, uniqify_term
+from L3.uniqify import Context, uniqify_term, uniqify_program
 from util.sequential_name_generator import SequentialNameGenerator
 
 
@@ -76,164 +75,173 @@ def test_uniqify_term_let():
     assert actual == expected
 
 
-def test_uniqify_term_letrec():
-    term = LetRec(
+def test_let_sum():
+    term = Let(
         bindings=[
             (
-                "f",
+                "make_adder",
                 Abstract(
                     parameters=["x"],
-                    body=Apply(
-                        target=Reference(name="f"),
-                        arguments=[Reference(name="x")],
+                    body=Abstract(
+                        parameters=["y"],
+                        body=Primitive(operator="+", left=Reference(name="x"), right=Reference(name="y")),
                     ),
                 ),
             )
         ],
-        body=Reference(name="f"),
-    )
-
-    fresh = SequentialNameGenerator()
-    actual = uniqify_term(term, {}, fresh)
-
-    expected = LetRec(
-        bindings=[
-            (
-                "f0",
-                Abstract(
-                    parameters=["x0"],
-                    body=Apply(
-                        target=Reference(name="f0"),
-                        arguments=[Reference(name="x0")],
-                    ),
-                ),
-            )
-        ],
-        body=Reference(name="f0"),
-    )
-
-    assert actual == expected
-
-
-def test_uniqify_term_structural_forms():
-    term = Begin(
-        effects=[
-            Store(
-                base=Reference(name="vec"),
-                index=0,
-                value=Primitive(
-                    operator="+",
-                    left=Reference(name="x"),
-                    right=Immediate(value=1),
-                ),
-            )
-        ],
-        value=Branch(
-            operator="==",
-            left=Load(base=Reference(name="vec"), index=0),
-            right=Immediate(value=0),
-            consequent=Reference(name="x"),
-            otherwise=Apply(
-                target=Reference(name="f"),
-                arguments=[Reference(name="x")],
-            ),
+        body=Let(
+            bindings=[("adder", Apply(target=Reference(name="make_adder"), arguments=[Reference(name="m")]))],
+            body=Apply(target=Reference(name="adder"), arguments=[Reference(name="n")]),
         ),
     )
-
-    context: Context = {"vec": "vec7", "x": "x3", "f": "f9"}
+    context: Context = {
+        "m": "4",
+        "n": "6",
+    }
     fresh = SequentialNameGenerator()
     actual = uniqify_term(term, context, fresh)
 
-    expected = Begin(
-        effects=[
-            Store(
-                base=Reference(name="vec7"),
-                index=0,
-                value=Primitive(
-                    operator="+",
-                    left=Reference(name="x3"),
-                    right=Immediate(value=1),
+    expected = Let(
+        bindings=[
+            (
+                "make_adder0",
+                Abstract(
+                    parameters=["x0"],
+                    body=Abstract(
+                        parameters=["y0"],
+                        body=Primitive(operator="+", left=Reference(name="x0"), right=Reference(name="y0")),
+                    ),
                 ),
             )
         ],
-        value=Branch(
-            operator="==",
-            left=Load(base=Reference(name="vec7"), index=0),
-            right=Immediate(value=0),
-            consequent=Reference(name="x3"),
-            otherwise=Apply(
-                target=Reference(name="f9"),
-                arguments=[Reference(name="x3")],
-            ),
+        body=Let(
+            bindings=[("adder0", Apply(target=Reference(name="make_adder0"), arguments=[Reference(name="4")]))],
+            body=Apply(target=Reference(name="adder0"), arguments=[Reference(name="6")]),
         ),
     )
 
     assert actual == expected
 
 
-def test_uniqify_program_renames_parameters_and_nested_binders():
-    program = Program(
-        parameters=["x", "f"],
-        body=Let(
-            bindings=[
-                ("x", Immediate(value=1)),
-                (
-                    "g",
-                    Abstract(
-                        parameters=["f"],
-                        body=Apply(
-                            target=Reference(name="f"),
-                            arguments=[Reference(name="x")],
+def test_letrec():
+    letrec = LetRec(
+        bindings=[
+            (
+                "loop",
+                Abstract(
+                    parameters=[],
+                    body=Branch(
+                        operator="<",
+                        left=Load(base=Reference(name="x"), index=0),
+                        right=Primitive(operator="+", left=Reference(name="n"), right=Immediate(value=1)),
+                        consequent=Begin(
+                            effects=[
+                                Store(
+                                    base=Reference(name="acc"),
+                                    index=0,
+                                    value=Primitive(
+                                        operator="+",
+                                        left=Load(base=Reference(name="acc"), index=0),
+                                        right=Load(base=Reference(name="x"), index=0),
+                                    ),
+                                ),
+                                Store(
+                                    base=Reference(name="acc"),
+                                    index=0,
+                                    value=Primitive(
+                                        operator="+",
+                                        left=Load(base=Reference(name="x"), index=0),
+                                        right=Immediate(value=1),
+                                    ),
+                                ),
+                            ],
+                            value=Apply(target=Reference(name="loop"), arguments=[]),
                         ),
+                        otherwise=Load(base=Reference(name="acc"), index=0),
                     ),
                 ),
+            )
+        ],
+        body=Apply(target=Reference(name="loop"), arguments=[]),
+    )
+    term = Let(
+        bindings=[("x", Allocate(count=1)), ("acc", Allocate(count=1))],
+        body=Begin(
+            effects=[
+                Store(base=Reference(name="x"), index=0, value=Immediate(value=0)),
+                Store(base=Reference(name="acc"), index=0, value=Immediate(value=0)),
             ],
-            body=Apply(
-                target=Reference(name="g"),
-                arguments=[Reference(name="f")],
-            ),
+            value=letrec,
         ),
     )
 
-    _, actual = uniqify_program(program)
+    context: Context = {
+        "n": "1",
+    }
+    fresh = SequentialNameGenerator()
+    actual = uniqify_term(term, context, fresh)
 
-    expected = Program(
-        parameters=["x0", "f0"],
-        body=Let(
-            bindings=[
-                ("x1", Immediate(value=1)),
-                (
-                    "g0",
-                    Abstract(
-                        parameters=["f1"],
-                        body=Apply(
-                            target=Reference(name="f1"),
-                            arguments=[Reference(name="x0")],
+    expected_letrec = LetRec(
+        bindings=[
+            (
+                "loop0",
+                Abstract(
+                    parameters=[],
+                    body=Branch(
+                        operator="<",
+                        left=Load(base=Reference(name="x0"), index=0),
+                        right=Primitive(operator="+", left=Reference(name="1"), right=Immediate(value=1)),
+                        consequent=Begin(
+                            effects=[
+                                Store(
+                                    base=Reference(name="acc0"),
+                                    index=0,
+                                    value=Primitive(
+                                        operator="+",
+                                        left=Load(base=Reference(name="acc0"), index=0),
+                                        right=Load(base=Reference(name="x0"), index=0),
+                                    ),
+                                ),
+                                Store(
+                                    base=Reference(name="acc0"),
+                                    index=0,
+                                    value=Primitive(
+                                        operator="+",
+                                        left=Load(base=Reference(name="x0"), index=0),
+                                        right=Immediate(value=1),
+                                    ),
+                                ),
+                            ],
+                            value=Apply(target=Reference(name="loop0"), arguments=[]),
                         ),
+                        otherwise=Load(base=Reference(name="acc0"), index=0),
                     ),
                 ),
+            )
+        ],
+        body=Apply(target=Reference(name="loop0"), arguments=[]),
+    )
+    expected = Let(
+        bindings=[("x0", Allocate(count=1)), ("acc0", Allocate(count=1))],
+        body=Begin(
+            effects=[
+                Store(base=Reference(name="x0"), index=0, value=Immediate(value=0)),
+                Store(base=Reference(name="acc0"), index=0, value=Immediate(value=0)),
             ],
-            body=Apply(
-                target=Reference(name="g0"),
-                arguments=[Reference(name="f0")],
-            ),
+            value=expected_letrec,
         ),
     )
-
     assert actual == expected
 
-def test_uniqify_term_invalid_term_raises_type_error():
-    fresh = SequentialNameGenerator()
 
-    with pytest.raises(TypeError, match="Unhandled L3 term in uniqify_term"):
-        uniqify_term("not a term", {}, fresh)
+def test_program():
+    body = Reference(name="x")
+    parameters = ["x"]
+    program = Program(parameters=parameters, body=body)
+    _, actual_program = uniqify_program(program=program)
 
+    expected_body = Reference(name="x0")
+    expected_parameters = ["x0"]
+    expected_program = Program(parameters=expected_parameters, body=expected_body)
 
-def test_uniqify_term_allocate():
-    term = Allocate(count=0)
-
-    fresh = SequentialNameGenerator()
-    actual = uniqify_term(term, {}, fresh)
-
-    expected = Allocate(count=0)
-    assert actual == expected
+    assert actual_program == expected_program

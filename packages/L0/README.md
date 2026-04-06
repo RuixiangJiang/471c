@@ -1,3 +1,12 @@
-L0 provides a basic assembly language. A program in L0 language contains procedures, which are made up with multiple statemsents. Each statement can perform operations in memory or between two variables.
+Program type is the starting point. Sequence type represents a collection of things. Program expects a sequence of procedures, but unlike L1, it does not have a body. Procedure type is new in L0 and represents a chain of execution. Unlike the previous nested structures, here we have a collection of procedures to execute.
 
-Comparing to L1, L0 doesn't have `Abstract`/`Apply`, losing the ability to define runtime functions and tail calls. Instead, all code should be executed in the pre-defined order.
+There is a generalized type called Statement that represents a union of types and employs the tag field for type resolution. Statement type is used heavily among all types and enables the types to recursively include one another. Through using the generalized type Statement, many more concrete types can be passed to each other as parameters. Then field is used for this chaining. Through the usage of Then, types can determine what is next and craft a sequential chain. Procedure type is the integral part of L0, it represents the wrapper type where the body field takes the Statement, parameters field takes the parameters, and name field is used for identifying.
+
+Another important type is Identifier which is a non empty string. Identifier is used for type fields that we no longer want to extend. From the name itself, it should be unique at least locally. It is used as reference in multiple types with the field destination and target usually.
+
+Branch type is used for control statements like switch and if. In L0, equals and less than operators are supported. Primitive type is used for operators like addition and multiplication and has a clear distinction between left and right terms.
+
+Copy type is used for moving the reference as source field to destination field then chaining another statement to then field. Immediate field is to quickly create an int between chains and save the reference to destination.
+Destination field is a reference in most of the types. This field is used to store the result to a given reference. Allocate, Load, Store types are used for saving and retrieving information. Address type is used for storing at the destination the the given reference value by name field before chaining another Statement. Call type is for invoking a function stored at the target field and calling it with sequence of Identifiers as arguments.
+
+Compared to L1, L0 does not have Apply and Abstract types. Additionally to L1, L0 has Address and Call types.

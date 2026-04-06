@@ -32,75 +32,74 @@ def uniqify_term(
 
     match term:
         case Let(bindings=bindings, body=body):
-            renamed = {name: fresh(name) for name, _ in bindings}
-            body_context = dict(context) | renamed
-            return Let(
-                bindings=[
-                    (renamed[name], _term(value))
-                    for name, value in bindings
-                ],
-                body=uniqify_term(body, body_context, fresh),
-            )
+            new_bindings = []
+            new_context = {**context}
+            for ref, t in bindings:
+                new_ref = fresh(ref)
+                new_context = {**new_context, ref: new_ref}
+                new_bindings.append((new_ref, _term(term=t, context=context, fresh=fresh)))
+            return Let(bindings=new_bindings, body=_term(term=body, context=new_context, fresh=fresh))
 
         case LetRec(bindings=bindings, body=body):
-            renamed = {name: fresh(name) for name, _ in bindings}
-            next_context = dict(context) | renamed
-            return LetRec(
-                bindings=[
-                    (renamed[name], uniqify_term(value, next_context, fresh))
-                    for name, value in bindings
-                ],
-                body=uniqify_term(body, next_context, fresh),
-            )
+            new_bindings = []
+            new_context = {**context}
+            for ref, t in bindings:
+                new_ref = fresh(ref)
+                new_context = {**new_context, ref: new_ref}
+                new_bindings.append((new_ref, _term(term=t, context=new_context, fresh=fresh)))
+            return LetRec(bindings=new_bindings, body=_term(term=body, context=new_context, fresh=fresh))
 
         case Reference(name=name):
-            return Reference(name=context[name])
+            return Reference(name=context.get(name, name))
 
         case Abstract(parameters=parameters, body=body):
-            renamed = {parameter: fresh(parameter) for parameter in parameters}
-            next_context = dict(context) | renamed
-            return Abstract(
-                parameters=[renamed[parameter] for parameter in parameters],
-                body=uniqify_term(body, next_context, fresh),
-            )
+            new_context = {**context}
+            new_parameters = []
+            for ref in parameters:
+                new_ref = fresh(ref)
+                new_context = {**new_context, ref: new_ref}
+                new_parameters.append(new_ref)
+            return Abstract(parameters=new_parameters, body=_term(term=body, context=new_context, fresh=fresh))
 
         case Apply(target=target, arguments=arguments):
-            return Apply(
-                target=_term(target),
-                arguments=[_term(argument) for argument in arguments],
-            )
+            new_arguments = [_term(term=t, context=context, fresh=fresh) for t in arguments]
+            return Apply(target=_term(term=target, context=context, fresh=fresh), arguments=new_arguments)
 
         case Immediate():
             return term
 
         case Primitive(operator=operator, left=left, right=right):
-            return Primitive(operator=operator, left=_term(left), right=_term(right))
+            return Primitive(
+                operator=operator,
+                left=_term(term=left, context=context, fresh=fresh),
+                right=_term(term=right, context=context, fresh=fresh),
+            )
 
         case Branch(operator=operator, left=left, right=right, consequent=consequent, otherwise=otherwise):
             return Branch(
                 operator=operator,
-                left=_term(left),
-                right=_term(right),
-                consequent=_term(consequent),
-                otherwise=_term(otherwise),
+                left=_term(term=left, context=context, fresh=fresh),
+                right=_term(term=right, context=context, fresh=fresh),
+                consequent=_term(term=consequent, context=context, fresh=fresh),
+                otherwise=_term(term=otherwise, context=context, fresh=fresh),
             )
 
         case Allocate():
             return term
 
         case Load(base=base, index=index):
-            return Load(base=_term(base), index=index)
+            return Load(base=_term(term=base, context=context, fresh=fresh), index=index)
 
         case Store(base=base, index=index, value=value):
-            return Store(base=_term(base), index=index, value=_term(value))
-
-        case Begin(effects=effects, value=value):  # pragma: no branch
-            return Begin(
-                effects=[_term(effect) for effect in effects],
-                value=_term(value),
+            return Store(
+                base=_term(term=base, context=context, fresh=fresh),
+                index=index,
+                value=_term(term=value, context=context, fresh=fresh),
             )
 
-    raise TypeError(f"Unhandled L3 term in uniqify_term: {term!r}")
+        case Begin(effects=effects, value=value):  # pragma: no branch
+            new_effects = [_term(term=t, context=context, fresh=fresh) for t in effects]
+            return Begin(effects=new_effects, value=_term(term=value, context=context, fresh=fresh))
 
 
 def uniqify_program(
