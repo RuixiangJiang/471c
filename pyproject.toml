@@ -45,4 +45,11 @@ addopts = [
 ]
 
 [tool.coverage.run]
-omit = ["**/__init__.py", "**/test/**"]
+source = [
+  "packages/L1/src/L1",
+  "packages/L2/src/L2",
+  "packages/L3/src/L3",
+  "packages/L4/src/L4",
+  "packages/L5/src/L5",
+]
+omit = ["**/__init__.py", "**/test/**", "**/to_python.py", "**/main.py"]
