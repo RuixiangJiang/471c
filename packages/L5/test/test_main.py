@@ -1,9 +1,8 @@
 from pathlib import Path
 
 from click.testing import CliRunner
-from L3.syntax import Program as L3Program
 
-from L5 import main as l5_main_module
+import L5.main as l5_main_module
 
 
 def test_main_pipeline_with_check_and_optimize(monkeypatch, tmp_path: Path):
@@ -57,7 +56,6 @@ def test_main_pipeline_with_check_and_optimize(monkeypatch, tmp_path: Path):
 
     assert result.exit_code == 0
     assert input_file.with_suffix(".py").read_text() == "PYTHON_CODE"
-
     assert calls == [
         ("dummy_parse", "source text"),
         ("convert_to_l3", "L5"),
@@ -125,7 +123,6 @@ def test_main_pipeline_without_check_or_optimize_and_with_explicit_output(monkey
 
     assert result.exit_code == 0
     assert output_file.read_text() == "OUT"
-
     assert calls == [
         ("dummy_parse", "abc"),
         ("convert_to_l3", "L5"),

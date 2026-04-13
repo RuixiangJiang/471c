@@ -78,6 +78,7 @@ class MethodDef(BaseModel, frozen=True):
 class ClassDef(BaseModel, frozen=True):
     tag: Literal["classdef"] = "classdef"
     name: Identifier
+    parent: Identifier | None = None
     fields: Sequence[FieldDef]
     methods: Sequence[MethodDef]
 
