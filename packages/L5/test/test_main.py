@@ -8,8 +8,8 @@ import L5.main as l5_main_module
 def test_main_pipeline_with_check_and_optimize(monkeypatch, tmp_path: Path):
     calls = []
 
-    def fake_dummy_parse(code: str):
-        calls.append(("dummy_parse", code))
+    def fake_parse_program(code: str):
+        calls.append(("parse_program", code))
         return "L5"
 
     def fake_convert_to_l3(program):
@@ -39,7 +39,7 @@ def test_main_pipeline_with_check_and_optimize(monkeypatch, tmp_path: Path):
         calls.append(("to_ast_program", program))
         return "PYTHON_CODE"
 
-    monkeypatch.setattr(l5_main_module, "dummy_parse", fake_dummy_parse)
+    monkeypatch.setattr(l5_main_module, "parse_program", fake_parse_program)
     monkeypatch.setattr(l5_main_module, "convert_to_l3", fake_convert_to_l3)
     monkeypatch.setattr(l5_main_module, "check_program", fake_check_program)
     monkeypatch.setattr(l5_main_module, "uniqify_program", fake_uniqify_program)
@@ -57,7 +57,7 @@ def test_main_pipeline_with_check_and_optimize(monkeypatch, tmp_path: Path):
     assert result.exit_code == 0
     assert input_file.with_suffix(".py").read_text() == "PYTHON_CODE"
     assert calls == [
-        ("dummy_parse", "source text"),
+        ("parse_program", "source text"),
         ("convert_to_l3", "L5"),
         ("check_program", "L3"),
         ("uniqify_program", "L3"),
@@ -71,8 +71,8 @@ def test_main_pipeline_with_check_and_optimize(monkeypatch, tmp_path: Path):
 def test_main_pipeline_without_check_or_optimize_and_with_explicit_output(monkeypatch, tmp_path: Path):
     calls = []
 
-    def fake_dummy_parse(code: str):
-        calls.append(("dummy_parse", code))
+    def fake_parse_program(code: str):
+        calls.append(("parse_program", code))
         return "L5"
 
     def fake_convert_to_l3(program):
@@ -102,7 +102,7 @@ def test_main_pipeline_without_check_or_optimize_and_with_explicit_output(monkey
         calls.append(("to_ast_program", program))
         return "OUT"
 
-    monkeypatch.setattr(l5_main_module, "dummy_parse", fake_dummy_parse)
+    monkeypatch.setattr(l5_main_module, "parse_program", fake_parse_program)
     monkeypatch.setattr(l5_main_module, "convert_to_l3", fake_convert_to_l3)
     monkeypatch.setattr(l5_main_module, "check_program", fake_check_program)
     monkeypatch.setattr(l5_main_module, "uniqify_program", fake_uniqify_program)
@@ -124,7 +124,7 @@ def test_main_pipeline_without_check_or_optimize_and_with_explicit_output(monkey
     assert result.exit_code == 0
     assert output_file.read_text() == "OUT"
     assert calls == [
-        ("dummy_parse", "abc"),
+        ("parse_program", "abc"),
         ("convert_to_l3", "L5"),
         ("uniqify_program", "L3"),
         ("eliminate_letrec_program", "L3-uniq2"),
