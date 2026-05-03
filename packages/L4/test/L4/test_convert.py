@@ -15,7 +15,70 @@ from L3.syntax import (
     Store,
 )
 from L4 import syntax as L4
-from L4.convert import SequentialNameGenerator, check_expression, convert_to_l3, process_expression
+from L4.convert import SequentialNameGenerator, check_expression, convert_to_l3, process_expression, assert_type_equality, resolve_type
+
+
+def test_resolve_type_resolves_symbol_to_concrete_type():
+    symbols = {
+        "T": L4.Int(),
+    }
+
+    assert resolve_type(
+        L4.Symbol(name="T", payload=L4.Int()),
+        symbols=symbols,
+    ) == L4.Int()
+
+
+def test_assert_type_equality_accepts_symbol_and_concrete_type_when_resolved_equal():
+    symbols = {
+        "T": L4.Int(),
+    }
+
+    assert_type_equality(
+        L4.Symbol(name="T", payload=L4.Int()),
+        L4.Int(),
+        symbols=symbols,
+    )
+
+
+def test_assert_type_equality_accepts_two_symbols_when_resolved_equal():
+    symbols = {
+        "T": L4.Int(),
+        "U": L4.Int(),
+    }
+
+    assert_type_equality(
+        L4.Symbol(name="T", payload=L4.Int()),
+        L4.Symbol(name="U", payload=L4.Int()),
+        symbols=symbols,
+    )
+
+
+def test_assert_type_equality_rejects_symbol_and_concrete_type_when_resolved_different():
+    symbols = {
+        "T": L4.Int(),
+    }
+
+    with pytest.raises(ValueError, match="Type mismatch"):
+        assert_type_equality(
+            L4.Symbol(name="T", payload=L4.Int()),
+            L4.Bool(),
+            symbols=symbols,
+        )
+
+
+def test_assert_type_equality_rejects_two_symbols_when_resolved_different():
+    symbols = {
+        "T": L4.Int(),
+        "U": L4.Bool(),
+    }
+
+    with pytest.raises(ValueError, match="Type mismatch"):
+        assert_type_equality(
+            L4.Symbol(name="T", payload=L4.Int()),
+            L4.Symbol(name="U", payload=L4.Bool()),
+            symbols=symbols,
+        )
 
 
 def test_fibonacci():
