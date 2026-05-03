@@ -1,0 +1,903 @@
+import pytest
+
+from L4 import syntax as L4
+from L5 import syntax as L5Syntax
+from L5.parse import parse_program
+
+
+SUM_DOWN_SOURCE = r"""
+(l5
+  (classes)
+  (definitions)
+  (letrec
+    ((sum
+      (-> (int) int)
+      (\ ((n int))
+        (if
+          (== n 0)
+          0
+          (+ n
+            (sum (- n 1)))))))
+    (sum 10)))
+"""
+
+
+FIBONACCI_SOURCE = r"""
+(l5
+  (classes)
+  (definitions)
+  (letrec
+    ((fib
+      (-> (int) int)
+      (\ ((n int))
+        (if
+          (< n 2)
+          n
+          (+ (fib (- n 1))
+             (fib (- n 2)))))))
+    (fib 6)))
+"""
+
+
+NESTED_LET_SOURCE = r"""
+(l5
+  (classes)
+  (definitions
+    (base int 5))
+  (let
+    ((x int base))
+    (let
+      ((y int (* x 2)))
+      (+ y 1))))
+"""
+
+
+SHORT_CIRCUIT_SOURCE = r"""
+(l5
+  (classes)
+  (definitions)
+  (||
+    (&& true false)
+    (== 1 1)))
+"""
+
+
+SWITCH_SOURCE = r"""
+(l5
+  (classes)
+  (definitions)
+  (let
+    ((n int 1))
+    (switch n
+      (case 0 42)
+      (case 1 43)
+      (default 99))))
+"""
+
+
+COLLECTION_SOURCE = r"""
+(l5
+  (classes)
+  (definitions
+    (xs (list int)
+      (new-list 3 int))
+    (p (pair int bool)
+      (new-pair 1 true (pair int bool))))
+  (begin
+    (set xs 0 7)
+    (get xs 0)))
+"""
+
+
+CONTROL_FLOW_SOURCE = r"""
+(l5
+  (classes)
+  (definitions)
+  (begin
+    (while true
+      (break))
+    (for 3
+      (continue))
+    0))
+"""
+
+
+FOREACH_SOURCE = r"""
+(l5
+  (classes)
+  (definitions
+    (xs (list int)
+      (new-list 3 int)))
+  (foreach
+    (item int)
+    xs
+    3
+    item))
+"""
+
+
+COUNTER_CLASS_SOURCE = r"""
+(l5
+  (classes
+    (class Counter
+      (fields
+        (value int))
+      (methods
+        (method get () int
+          (. this value))
+        (method inc ((delta int)) void
+          (set-field! this value
+            (+ (. this value) delta))))))
+  (definitions
+    (def c (class Counter)
+      (new Counter 0)))
+  (begin
+    (call-method c inc 5)
+    (call-method c get)))
+"""
+
+
+INHERITANCE_SOURCE = r"""
+(l5
+  (classes
+    (class Base
+      (fields
+        (x int))
+      (methods
+        (method getX () int
+          (. this x))))
+    (class Derived extends Base
+      (fields
+        (y int))
+      (methods
+        (method getY () int
+          (. this y)))))
+  (definitions
+    (def d (class Derived)
+      (new Derived 1 2)))
+  (call-method d getY))
+"""
+
+
+HIGHER_ORDER_SOURCE = r"""
+(l5
+  (classes)
+  (definitions)
+  ((lambda ((x int))
+     (+ x 1))
+   41))
+"""
+
+MUTUAL_RECURSION_SOURCE = r"""
+(l5
+  (classes)
+  (definitions)
+  (letrec
+    ((even
+      (-> (int) bool)
+      (\ ((n int))
+        (if
+          (== n 0)
+          true
+          (odd (- n 1)))))
+     (odd
+      (-> (int) bool)
+      (\ ((n int))
+        (if
+          (== n 0)
+          false
+          (even (- n 1))))))
+    (even 6)))
+"""
+
+
+MAX_WITH_IF_SOURCE = r"""
+(l5
+  (classes)
+  (definitions)
+  ((lambda ((a int))
+     ((lambda ((b int))
+        (if
+          (< a b)
+          b
+          a))
+      20))
+   10))
+"""
+
+
+BOOL_SWITCH_SOURCE = r"""
+(l5
+  (classes)
+  (definitions)
+  (switch true
+    (case true 1)
+    (case false 0)
+    (default 99)))
+"""
+
+
+HEAP_AND_CAPSULE_SOURCE = r"""
+(l5
+  (classes)
+  (definitions
+    (cell (mutable int)
+      (heap-allocate 10)))
+  (begin
+    (set cell 0 20)
+    (capsule int
+      (get cell 0))))
+"""
+
+
+PAIR_AND_LIST_SOURCE = r"""
+(l5
+  (classes)
+  (definitions
+    (xs (list int)
+      (new-list 4 int))
+    (flagged (pair int bool)
+      (new-pair 7 false (pair int bool))))
+  (begin
+    (set xs 0 1)
+    (set xs 1 2)
+    (get xs 1)))
+"""
+
+
+LOOP_NESTING_SOURCE = r"""
+(l5
+  (classes)
+  (definitions)
+  (begin
+    (for 2
+      (begin
+        (while false
+          (continue))
+        1))
+    0))
+"""
+
+
+FOREACH_SWITCH_SOURCE = r"""
+(l5
+  (classes)
+  (definitions
+    (xs (list int)
+      (new-list 3 int)))
+  (foreach
+    (x int)
+    xs
+    3
+    (switch x
+      (case 0 10)
+      (case 1 20)
+      (default 30))))
+"""
+
+
+RECTANGLE_CLASS_SOURCE = r"""
+(l5
+  (classes
+    (class Rectangle
+      (fields
+        (width int)
+        (height int))
+      (methods
+        (method area () int
+          (* (. this width)
+             (. this height)))
+        (method setWidth ((w int)) void
+          (set-field! this width w))
+        (method setHeight ((h int)) void
+          (set-field! this height h)))))
+  (definitions
+    (def r (class Rectangle)
+      (new Rectangle 3 4)))
+  (begin
+    (call-method r setWidth 5)
+    (call-method r setHeight 6)
+    (call-method r area)))
+"""
+
+
+POINT_MOVE_CLASS_SOURCE = r"""
+(l5
+  (classes
+    (class Point
+      (fields
+        (x int)
+        (y int))
+      (methods
+        (method moveX ((dx int)) void
+          (set-field! this x
+            (+ (. this x) dx)))
+        (method moveY ((dy int)) void
+          (set-field! this y
+            (+ (. this y) dy)))
+        (method getX () int
+          (. this x))
+        (method getY () int
+          (. this y)))))
+  (definitions
+    (def p (class Point)
+      (new Point 0 0)))
+  (begin
+    (call-method p moveX 3)
+    (call-method p moveY 4)
+    (+ (call-method p getX)
+       (call-method p getY))))
+"""
+
+
+ANIMAL_INHERITANCE_SOURCE = r"""
+(l5
+  (classes
+    (class Animal
+      (fields
+        (age int))
+      (methods
+        (method getAge () int
+          (. this age))))
+    (class Dog extends Animal
+      (fields
+        (weight int))
+      (methods
+        (method getWeight () int
+          (. this weight))
+        (method score () int
+          (+ (. this age)
+             (. this weight))))))
+  (definitions
+    (def dog (class Dog)
+      (new Dog 5 20)))
+  (call-method dog score))
+"""
+
+
+FUNCTION_AS_ARGUMENT_SOURCE = r"""
+(l5
+  (classes)
+  (definitions)
+  ((lambda ((f (-> (int) int)))
+     (f 10))
+   (lambda ((x int))
+     (+ x 32))))
+"""
+
+
+NESTED_METHOD_CALL_SOURCE = r"""
+(l5
+  (classes
+    (class Box
+      (fields
+        (value int))
+      (methods
+        (method get () int
+          (. this value))
+        (method set ((v int)) void
+          (set-field! this value v)))))
+  (definitions
+    (def a (class Box)
+      (new Box 1))
+    (def b (class Box)
+      (new Box 2)))
+  (begin
+    (call-method a set
+      (+ (call-method b get)
+         10))
+    (call-method a get)))
+"""
+
+
+ALIAS_SYNTAX_SOURCE = r"""
+(l5
+  (classes
+    (class Cell
+      (fields
+        (value int))
+      (methods
+        (method get () int
+          (field-access this value))
+        (method set ((v int)) void
+          (field-assign this value v)))))
+  (definitions
+    (def c (class Cell)
+      (new-object Cell 0)))
+  (begin
+    (method-call c set 8)
+    (: c get)))
+"""
+
+
+SOURCE_PROGRAMS = [
+    ("sum_down", SUM_DOWN_SOURCE),
+    ("fibonacci", FIBONACCI_SOURCE),
+    ("nested_let", NESTED_LET_SOURCE),
+    ("short_circuit", SHORT_CIRCUIT_SOURCE),
+    ("switch", SWITCH_SOURCE),
+    ("collection", COLLECTION_SOURCE),
+    ("control_flow", CONTROL_FLOW_SOURCE),
+    ("foreach", FOREACH_SOURCE),
+    ("counter_class", COUNTER_CLASS_SOURCE),
+    ("inheritance", INHERITANCE_SOURCE),
+    ("higher_order", HIGHER_ORDER_SOURCE),
+    ("mutual_recursion", MUTUAL_RECURSION_SOURCE),
+    ("max_with_if", MAX_WITH_IF_SOURCE),
+    ("bool_switch", BOOL_SWITCH_SOURCE),
+    ("heap_and_capsule", HEAP_AND_CAPSULE_SOURCE),
+    ("pair_and_list", PAIR_AND_LIST_SOURCE),
+    ("loop_nesting", LOOP_NESTING_SOURCE),
+    ("foreach_switch", FOREACH_SWITCH_SOURCE),
+    ("rectangle_class", RECTANGLE_CLASS_SOURCE),
+    ("point_move_class", POINT_MOVE_CLASS_SOURCE),
+    ("animal_inheritance", ANIMAL_INHERITANCE_SOURCE),
+    ("function_as_argument", FUNCTION_AS_ARGUMENT_SOURCE),
+    ("nested_method_call", NESTED_METHOD_CALL_SOURCE),
+    ("alias_syntax", ALIAS_SYNTAX_SOURCE),
+]
+
+
+@pytest.mark.parametrize(("name", "source"), SOURCE_PROGRAMS)
+def test_source_programs_parse_to_l5_program(name: str, source: str):
+    program = parse_program(source)
+
+    assert isinstance(program, L5Syntax.Program)
+    assert program.tag == "l5"
+
+
+@pytest.mark.parametrize(
+    ("source", "expected_body_tag"),
+    [
+        (SUM_DOWN_SOURCE, "letrec"),
+        (FIBONACCI_SOURCE, "letrec"),
+        (NESTED_LET_SOURCE, "let"),
+        (SHORT_CIRCUIT_SOURCE, "shortcircuit"),
+        (SWITCH_SOURCE, "let"),
+        (COLLECTION_SOURCE, "bunch"),
+        (CONTROL_FLOW_SOURCE, "bunch"),
+        (FOREACH_SOURCE, "foreach"),
+        (COUNTER_CLASS_SOURCE, "bunch"),
+        (INHERITANCE_SOURCE, "methodcall"),
+        (HIGHER_ORDER_SOURCE, "call"),
+        (MUTUAL_RECURSION_SOURCE, "letrec"),
+        (MAX_WITH_IF_SOURCE, "call"),
+        (BOOL_SWITCH_SOURCE, "switch"),
+        (HEAP_AND_CAPSULE_SOURCE, "bunch"),
+        (PAIR_AND_LIST_SOURCE, "bunch"),
+        (LOOP_NESTING_SOURCE, "bunch"),
+        (FOREACH_SWITCH_SOURCE, "foreach"),
+        (RECTANGLE_CLASS_SOURCE, "bunch"),
+        (POINT_MOVE_CLASS_SOURCE, "bunch"),
+        (ANIMAL_INHERITANCE_SOURCE, "methodcall"),
+        (FUNCTION_AS_ARGUMENT_SOURCE, "call"),
+        (NESTED_METHOD_CALL_SOURCE, "bunch"),
+        (ALIAS_SYNTAX_SOURCE, "bunch"),
+    ],
+)
+def test_source_program_body_tags(source: str, expected_body_tag: str):
+    program = parse_program(source)
+
+    assert program.body.tag == expected_body_tag
+
+
+@pytest.mark.parametrize(
+    ("source", "function_name"),
+    [
+        (SUM_DOWN_SOURCE, "sum"),
+        (FIBONACCI_SOURCE, "fib"),
+    ],
+)
+def test_recursive_program_sources_have_letrec_function(source: str, function_name: str):
+    program = parse_program(source)
+
+    assert isinstance(program.body, L4.LetRec)
+
+    name, typeof, value = program.body.bindings[0]
+
+    assert name == function_name
+    assert isinstance(typeof, L4.FuncType)
+    assert typeof.parameters == [L4.Int()]
+    assert typeof.result == L4.Int()
+    assert isinstance(value, L4.Function)
+
+
+def test_nested_let_source_shape():
+    program = parse_program(NESTED_LET_SOURCE)
+
+    assert program.definitions == [
+        ("base", L4.Int(), L4.Immediate(value=5)),
+    ]
+
+    outer_let = program.body
+    assert isinstance(outer_let, L4.Let)
+    assert outer_let.bindings[0][0] == "x"
+
+    inner_let = outer_let.body
+    assert isinstance(inner_let, L4.Let)
+    assert inner_let.bindings[0][0] == "y"
+    assert isinstance(inner_let.body, L4.Operation)
+    assert inner_let.body.operator == "+"
+
+
+def test_short_circuit_source_shape():
+    program = parse_program(SHORT_CIRCUIT_SOURCE)
+
+    outer = program.body
+
+    assert isinstance(outer, L5Syntax.ShortCircuit)
+    assert outer.operator == "||"
+    assert isinstance(outer.left, L5Syntax.ShortCircuit)
+    assert outer.left.operator == "&&"
+    assert isinstance(outer.right, L4.Operation)
+    assert outer.right.operator == "=="
+
+
+def test_switch_source_shape():
+    program = parse_program(SWITCH_SOURCE)
+
+    let_body = program.body
+    assert isinstance(let_body, L4.Let)
+
+    switch = let_body.body
+    assert isinstance(switch, L5Syntax.Switch)
+    assert switch.scrutinee == L4.Reference(name="n")
+    assert len(switch.cases) == 2
+    assert switch.cases[0].value == 0
+    assert switch.cases[1].value == 1
+    assert switch.default == L4.Immediate(value=99)
+
+
+def test_collection_source_shape():
+    program = parse_program(COLLECTION_SOURCE)
+
+    assert len(program.definitions) == 2
+
+    xs_name, xs_type, xs_value = program.definitions[0]
+    assert xs_name == "xs"
+    assert xs_type == L4.List(typeof=L4.Int())
+    assert xs_value == L4.NewList(size=3, typeof=L4.Int())
+
+    pair_name, pair_type, pair_value = program.definitions[1]
+    assert pair_name == "p"
+    assert pair_type == L4.Pair(type1=L4.Int(), type2=L4.Bool())
+    assert isinstance(pair_value, L4.NewPair)
+
+    body = program.body
+    assert isinstance(body, L4.Bunch)
+    assert isinstance(body.expressions[0], L4.Set)
+    assert isinstance(body.expressions[1], L4.Get)
+
+
+def test_control_flow_source_shape():
+    program = parse_program(CONTROL_FLOW_SOURCE)
+
+    body = program.body
+
+    assert isinstance(body, L4.Bunch)
+    assert isinstance(body.expressions[0], L4.While)
+    assert isinstance(body.expressions[0].run, L5Syntax.Break)
+    assert isinstance(body.expressions[1], L4.For)
+    assert body.expressions[1].times == 3
+    assert isinstance(body.expressions[1].run, L5Syntax.Continue)
+    assert body.expressions[2] == L4.Immediate(value=0)
+
+
+def test_foreach_source_shape():
+    program = parse_program(FOREACH_SOURCE)
+
+    foreach = program.body
+
+    assert isinstance(foreach, L5Syntax.Foreach)
+    assert foreach.binder == "item"
+    assert foreach.typeof == L4.Int()
+    assert foreach.target == L4.Reference(name="xs")
+    assert foreach.count == 3
+    assert foreach.run == L4.Reference(name="item")
+
+
+def test_counter_class_source_shape():
+    program = parse_program(COUNTER_CLASS_SOURCE)
+
+    assert len(program.classes) == 1
+
+    counter = program.classes[0]
+    assert counter.name == "Counter"
+    assert counter.parent is None
+    assert counter.fields == [
+        L5Syntax.FieldDef(name="value", typeof=L4.Int()),
+    ]
+    assert [method.name for method in counter.methods] == ["get", "inc"]
+
+    get_method = counter.methods[0]
+    assert get_method.parameters == []
+    assert get_method.returns == L4.Int()
+    assert isinstance(get_method.body, L5Syntax.FieldAccess)
+
+    inc_method = counter.methods[1]
+    assert inc_method.parameters == [("delta", L4.Int())]
+    assert inc_method.returns == L4.Void()
+    assert isinstance(inc_method.body, L5Syntax.FieldAssign)
+
+    assert program.definitions[0][0] == "c"
+    assert program.definitions[0][1] == L5Syntax.ClassType(name="Counter")
+    assert isinstance(program.definitions[0][2], L5Syntax.NewObject)
+
+    body = program.body
+    assert isinstance(body, L4.Bunch)
+    assert isinstance(body.expressions[0], L5Syntax.MethodCall)
+    assert body.expressions[0].method == "inc"
+    assert isinstance(body.expressions[1], L5Syntax.MethodCall)
+    assert body.expressions[1].method == "get"
+
+
+def test_inheritance_source_shape():
+    program = parse_program(INHERITANCE_SOURCE)
+
+    assert len(program.classes) == 2
+
+    base = program.classes[0]
+    derived = program.classes[1]
+
+    assert base.name == "Base"
+    assert base.parent is None
+
+    assert derived.name == "Derived"
+    assert derived.parent == "Base"
+    assert derived.fields == [
+        L5Syntax.FieldDef(name="y", typeof=L4.Int()),
+    ]
+
+    assert program.definitions[0][0] == "d"
+    assert program.definitions[0][1] == L5Syntax.ClassType(name="Derived")
+
+    body = program.body
+    assert isinstance(body, L5Syntax.MethodCall)
+    assert body.target == L4.Reference(name="d")
+    assert body.method == "getY"
+    assert body.arguments == []
+
+
+def test_higher_order_source_shape():
+    program = parse_program(HIGHER_ORDER_SOURCE)
+
+    call = program.body
+
+    assert isinstance(call, L4.Call)
+    assert isinstance(call.target, L4.Function)
+    assert call.target.params == [("x", L4.Int())]
+    assert isinstance(call.target.body, L4.Operation)
+    assert call.target.body.operator == "+"
+    assert call.arguments == [L4.Immediate(value=41)]
+
+
+def test_mutual_recursion_source_shape():
+    program = parse_program(MUTUAL_RECURSION_SOURCE)
+
+    assert isinstance(program.body, L4.LetRec)
+
+    even_name, even_type, even_value = program.body.bindings[0]
+    odd_name, odd_type, odd_value = program.body.bindings[1]
+
+    assert even_name == "even"
+    assert odd_name == "odd"
+
+    assert even_type == L4.FuncType(parameters=[L4.Int()], result=L4.Bool())
+    assert odd_type == L4.FuncType(parameters=[L4.Int()], result=L4.Bool())
+
+    assert isinstance(even_value, L4.Function)
+    assert isinstance(odd_value, L4.Function)
+
+
+def test_bool_switch_source_shape():
+    program = parse_program(BOOL_SWITCH_SOURCE)
+
+    switch = program.body
+
+    assert isinstance(switch, L5Syntax.Switch)
+    assert switch.scrutinee == L4.Immediate(value=True)
+    assert switch.cases[0].value is True
+    assert switch.cases[1].value is False
+    assert switch.default == L4.Immediate(value=99)
+
+
+def test_heap_and_capsule_source_shape():
+    program = parse_program(HEAP_AND_CAPSULE_SOURCE)
+
+    name, typeof, value = program.definitions[0]
+
+    assert name == "cell"
+    assert typeof == L4.Mutable(oftype=L4.Int())
+    assert isinstance(value, L4.HeapAllocate)
+
+    body = program.body
+
+    assert isinstance(body, L4.Bunch)
+    assert isinstance(body.expressions[0], L4.Set)
+    assert isinstance(body.expressions[1], L4.Capsule)
+
+
+def test_pair_and_list_source_shape():
+    program = parse_program(PAIR_AND_LIST_SOURCE)
+
+    assert len(program.definitions) == 2
+
+    xs_name, xs_type, xs_value = program.definitions[0]
+    pair_name, pair_type, pair_value = program.definitions[1]
+
+    assert xs_name == "xs"
+    assert xs_type == L4.List(typeof=L4.Int())
+    assert isinstance(xs_value, L4.NewList)
+
+    assert pair_name == "flagged"
+    assert pair_type == L4.Pair(type1=L4.Int(), type2=L4.Bool())
+    assert isinstance(pair_value, L4.NewPair)
+
+    body = program.body
+    assert isinstance(body, L4.Bunch)
+    assert isinstance(body.expressions[0], L4.Set)
+    assert isinstance(body.expressions[1], L4.Set)
+    assert isinstance(body.expressions[2], L4.Get)
+
+
+def test_loop_nesting_source_shape():
+    program = parse_program(LOOP_NESTING_SOURCE)
+
+    body = program.body
+
+    assert isinstance(body, L4.Bunch)
+
+    loop = body.expressions[0]
+    assert isinstance(loop, L4.For)
+    assert loop.times == 2
+    assert isinstance(loop.run, L4.Bunch)
+
+    nested_while = loop.run.expressions[0]
+    assert isinstance(nested_while, L4.While)
+    assert nested_while.condition == L4.Immediate(value=False)
+    assert isinstance(nested_while.run, L5Syntax.Continue)
+
+
+def test_foreach_switch_source_shape():
+    program = parse_program(FOREACH_SWITCH_SOURCE)
+
+    foreach = program.body
+
+    assert isinstance(foreach, L5Syntax.Foreach)
+    assert foreach.binder == "x"
+    assert foreach.typeof == L4.Int()
+    assert foreach.target == L4.Reference(name="xs")
+    assert foreach.count == 3
+    assert isinstance(foreach.run, L5Syntax.Switch)
+
+
+def test_rectangle_class_source_shape():
+    program = parse_program(RECTANGLE_CLASS_SOURCE)
+
+    assert len(program.classes) == 1
+
+    rectangle = program.classes[0]
+
+    assert rectangle.name == "Rectangle"
+    assert [field.name for field in rectangle.fields] == ["width", "height"]
+    assert [method.name for method in rectangle.methods] == ["area", "setWidth", "setHeight"]
+
+    area = rectangle.methods[0]
+    assert area.returns == L4.Int()
+    assert isinstance(area.body, L4.Operation)
+    assert area.body.operator == "*"
+
+    body = program.body
+    assert isinstance(body, L4.Bunch)
+    assert [expr.method for expr in body.expressions] == ["setWidth", "setHeight", "area"]
+
+
+def test_point_move_class_source_shape():
+    program = parse_program(POINT_MOVE_CLASS_SOURCE)
+
+    point = program.classes[0]
+
+    assert point.name == "Point"
+    assert [field.name for field in point.fields] == ["x", "y"]
+    assert [method.name for method in point.methods] == ["moveX", "moveY", "getX", "getY"]
+
+    move_x = point.methods[0]
+    move_y = point.methods[1]
+
+    assert isinstance(move_x.body, L5Syntax.FieldAssign)
+    assert isinstance(move_y.body, L5Syntax.FieldAssign)
+
+    body = program.body
+    assert isinstance(body, L4.Bunch)
+    assert isinstance(body.expressions[-1], L4.Operation)
+    assert body.expressions[-1].operator == "+"
+
+
+def test_animal_inheritance_source_shape():
+    program = parse_program(ANIMAL_INHERITANCE_SOURCE)
+
+    assert len(program.classes) == 2
+
+    animal = program.classes[0]
+    dog = program.classes[1]
+
+    assert animal.name == "Animal"
+    assert animal.parent is None
+
+    assert dog.name == "Dog"
+    assert dog.parent == "Animal"
+    assert [field.name for field in dog.fields] == ["weight"]
+    assert [method.name for method in dog.methods] == ["getWeight", "score"]
+
+    body = program.body
+    assert isinstance(body, L5Syntax.MethodCall)
+    assert body.target == L4.Reference(name="dog")
+    assert body.method == "score"
+
+
+def test_function_as_argument_source_shape():
+    program = parse_program(FUNCTION_AS_ARGUMENT_SOURCE)
+
+    call = program.body
+
+    assert isinstance(call, L4.Call)
+    assert isinstance(call.target, L4.Function)
+    assert len(call.arguments) == 1
+    assert isinstance(call.arguments[0], L4.Function)
+
+    param_name, param_type = call.target.params[0]
+
+    assert param_name == "f"
+    assert param_type == L4.FuncType(parameters=[L4.Int()], result=L4.Int())
+
+
+def test_nested_method_call_source_shape():
+    program = parse_program(NESTED_METHOD_CALL_SOURCE)
+
+    assert len(program.definitions) == 2
+
+    body = program.body
+
+    assert isinstance(body, L4.Bunch)
+
+    set_call = body.expressions[0]
+    get_call = body.expressions[1]
+
+    assert isinstance(set_call, L5Syntax.MethodCall)
+    assert set_call.method == "set"
+    assert len(set_call.arguments) == 1
+    assert isinstance(set_call.arguments[0], L4.Operation)
+
+    nested_get = set_call.arguments[0].left
+    assert isinstance(nested_get, L5Syntax.MethodCall)
+    assert nested_get.method == "get"
+
+    assert isinstance(get_call, L5Syntax.MethodCall)
+    assert get_call.method == "get"
+
+
+def test_alias_syntax_source_shape():
+    program = parse_program(ALIAS_SYNTAX_SOURCE)
+
+    cell = program.classes[0]
+
+    assert cell.name == "Cell"
+    assert [method.name for method in cell.methods] == ["get", "set"]
+
+    get_method = cell.methods[0]
+    set_method = cell.methods[1]
+
+    assert isinstance(get_method.body, L5Syntax.FieldAccess)
+    assert isinstance(set_method.body, L5Syntax.FieldAssign)
+
+    definition = program.definitions[0]
+    assert definition[0] == "c"
+    assert definition[1] == L5Syntax.ClassType(name="Cell")
+    assert isinstance(definition[2], L5Syntax.NewObject)
+
+    body = program.body
+    assert isinstance(body, L4.Bunch)
+    assert isinstance(body.expressions[0], L5Syntax.MethodCall)
+    assert body.expressions[0].method == "set"
+    assert isinstance(body.expressions[1], L5Syntax.MethodCall)
+    assert body.expressions[1].method == "get"
