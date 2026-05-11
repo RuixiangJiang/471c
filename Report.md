@@ -20,9 +20,9 @@ What L5 does:
 - `foreach`
 - Class with basic construction methods, inheritance, and overridding.
 
-## L4
+## L4 (Dogukan Avci)
 
-## L5
+## L5 (Ruixiang Jiang)
 
 L5 is implemented as a high-level front end on top of L4. The backend does not need to understand classes, inheritance, switch, foreach, or short-circuit operators directly. Instead, L5 introduces new AST nodes and then lowers them into existing L4 constructs.
 
