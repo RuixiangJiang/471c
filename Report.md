@@ -22,6 +22,451 @@ What L5 does:
 
 ## L4 (Dogukan Avci)
 
+L4 introduces types on top of L3, and it performs static type checking.
+It ensures type cohesion and rejects circular symbolic dependencies during compilation.
+It introduces custom types to enable higher-level compilers to simplify their implementations.
+L3 did not require any expansion to accommodate the features added in L4.
+This is a strong point, since the L3 backend did not require any extra workload to support a safer and more feature-rich compiler on top of it.
+
+## Overview
+
+The main pipeline operation of L4 to L3 conversion goes like so:
+L4 program ->
+Type checking ->
+Lowering and translation ->
+L3 program
+
+For example:
+L4.While(
+    condition=L4.Operation(
+        operator="<",
+        left=L4.Get(target=L4.Reference(name="i"), index=0),
+        right=L4.Immediate(value=5),
+    ),
+    run=L4.Bunch(
+        expressions=[
+            L4.Set(
+                target=L4.Reference(name="i"),
+                index=0,
+                value=L4.Operation(
+                    operator="+",
+                    left=L4.Get(target=L4.Reference(name="i"), index=0),
+                    right=L4.Immediate(value=1),
+                ),
+            ),
+            L4.Set(
+                target=L4.Reference(name="l"),
+                index=2,
+                value=L4.NewPair(
+                    val1=L4.HeapAllocate(val=L4.Immediate(value=True)),
+                    val2=L4.Function(params=[], body=L4.Empty()),
+                    typeof=L4.Pair(
+                        type1=L4.Mutable(oftype=L4.Bool()),
+                        type2=L4.FuncType(parameters=[], result=L4.Void()),
+                    ),
+                ),
+            ),
+        ]
+    )
+)
+This code iterates 5 times and assigns the list l at index 2 with new pairs it allocates. The pairs are composed of a boolean and a function.
+This L4 expression lowers into L3 with the following form:
+
+LetRec(
+  bindings=[
+      (
+          "while0",
+          Abstract(
+              parameters=[],
+              body=Branch(
+                  operator="==",
+                  left=Immediate(value=1),
+                  right=Branch(
+                      operator="<",
+                      left=Load(base=Reference(name="i"), index=0),
+                      right=Immediate(value=5),
+                      consequent=Immediate(value=1),
+                      otherwise=Immediate(value=0),
+                  ),
+                  consequent=Begin(
+                      effects=[
+                          Begin(
+                              effects=[
+                                  Store(
+                                      base=Reference(name="i"),
+                                      index=0,
+                                      value=Primitive(
+                                          operator="+",
+                                          left=Load(
+                                              base=Reference(name="i"),
+                                              index=0,
+                                          ),
+                                          right=Immediate(value=1),
+                                      ),
+                                  )
+                              ],
+                              value=Store(
+                                  base=Load(
+                                      base=Reference(name="l"),
+                                      index=0,
+                                  ),
+                                  index=2,
+                                  value=Let(
+                                      bindings=[("pair0", Allocate(count=2))],
+                                      body=Begin(
+                                          effects=[
+                                              Store(
+                                                  base=Reference(name="pair0"),
+                                                  index=0,
+                                                  value=Let(
+                                                      bindings=[
+                                                          (
+                                                              "heapallocateval2",
+                                                              Immediate(value=1),
+                                                          ),
+                                                          (
+                                                              "heapallocate2",
+                                                              Allocate(count=1),
+                                                          ),
+                                                      ],
+                                                      body=Begin(
+                                                          effects=[
+                                                              Store(
+                                                                  base=Reference(
+                                                                      name="heapallocate2",
+                                                                  ),
+                                                                  index=0,
+                                                                  value=Reference(
+                                                                      name="heapallocateval2",
+                                                                  ),
+                                                              )
+                                                          ],
+                                                          value=Reference(
+                                                              name="heapallocate2",
+                                                          ),
+                                                      ),
+                                                  ),
+                                              ),
+                                              Store(
+                                                  base=Reference(name="pair0"),
+                                                  index=1,
+                                                  value=Abstract(
+                                                      parameters=[],
+                                                      body=Immediate(value=0),
+                                                  ),
+                                              ),
+                                          ],
+                                          value=Reference(name="pair0"),
+                                      ),
+                                  ),
+                              ),
+                          )
+                      ],
+                      value=Apply(
+                          target=Reference(name="while0"),
+                          arguments=[],
+                      ),
+                  ),
+                  otherwise=Immediate(value=0),
+              ),
+          ),
+      )
+  ],
+  body=Apply(target=Reference(name="while0"), arguments=[])
+)
+
+## Types
+
+L4 has the following types:
+Mutable | Int | Bool | FuncType | List | Pair | Symbol | Void
+
+-Int, Bool, Void are primitive (concrete) types
+-FuncType represents the function signatures with the type of each parameter and the return type of the function
+-Symbol is resolved to a concrete type before its type is compared and checked. It serves as the custom type feature
+-Pair, List, and Mutable are wrapper types that use other types in their signature
+
+For example:
+(mutable int):
+is a heap-allocated, modifiable integer value.
+
+(pair int (mutable (pair bool int))):
+is a pair type where the first element is an int and the second element is another pair type with a bool and an int.
+The initial pair is immutable, but the child pair is mutable.
+
+## Type checking
+
+L4 is very strict when it comes to types.
+Compound expressions are strictly checked to ensure that all resolution paths preserve type safety.
+Since L4 also offers custom symbolic types, the compatibility of symbols and concrete types is also supported through symbol resolution.
+The operands and all expressions need to satisfy expected typing rules to pass the compiler checks.
+
+For example:
+(if true A B):
+is valid only if A type is equal to B type, and it is checked before runtime.
+
+Similarly:
+(+ a 2):
+needs to make sure a is of type int before allowing addition.
+
+## Check expression
+
+Check expression acts recursively on ASTs and traverses symbols and
+subexpressions until it finds its way to a concrete representation.
+To ensure this, each new expression in L4 has a signature. This signature
+is a method determining the type the expression ultimately resolves to, while also incorperating symbols
+at every level.
+
+Check expression recursively resolves types for the following:
+Conditionals
+Arithmetics
+Functions and function calls:
+-Each argument type in a call is checked, and the correct number of arguments along with correct types of arguments must be provided
+Immediates
+Mutable read / write operations
+-Write operation checks if the data type is actually mutable
+List and pair access and construction
+Let and Letrec
+Loops
+Sequencing (Bunch)
+
+For example:
+((lambda ((x int) (y bool)) x) 7 true)
+This is a valid function call, but:
+((lambda ((x int) (y bool)) x) 7 9)
+This is not because the second argument provided here is an int, but the function expects a bool.
+
+Similarly:
+((lambda ((x int) (y bool) (z bool)) x) 7 true true)
+This is a valid function call, but:
+((lambda ((x int) (y bool) (z bool)) x) 7 true true 55)
+This is not because the code attempts to call the method with an extra argument
+and the function type does not match.
+
+(set x 0 6)
+This is only valid if x’s type has a mutable wrapper.
+
+The custom type (Symbol) also resolves to a concrete type before going through the check:
+For example, for the given symbol context:
+
+symbols = {
+    "T": L4.Int(),
+}
+
+Following assertions both pass:
+
+assert resolve_type(
+    L4.Symbol(name="T", payload=L4.Bool()),
+    symbols=symbols,
+) == L4.Int()
+
+assert resolve_type(
+    L4.Symbol(name="X", payload=L4.Int()),
+    symbols=symbols,
+) == L4.Int()
+Payload section here is the fallback type when the symbol does not exist, so for the second example
+the X symbol will fail to resolve and the payload type will be used as the fallback type and pass the check.
+
+## Symbol resolution
+
+Symbol has a separate context where different symbols could reference each other.
+Symbol resolution traverses the symbolic context until it finds a concrete representation and detects circular references if they exist.
+All final type comparisons are made solely with resolved types.
+Symbol type is created to make it easy for developers to reuse types.
+They are essentially aliases that make it easier to navigate a strict type-checking compiler.
+
+Symbols could represent large and composite types, for example:
+custom_list = (mutable (list (pair (mutable bool) (-> () void)))) 
+is a mutable list composed of pairs that contain mutable bools and function types.
+
+For example:
+custom_type = int
+(let ((x custom_type 5)) (+ x 1) )
+
+This is valid because custom_type will resolve to int prior to type check and pass the checks.
+
+custom_type = custom_type_2
+custom_type_2 = custom_type_3
+custom_type_3 = custom_type
+
+This is invalid because of the circular dependency of symbols, so the compiler will notify you about the circular symbols.
+
+## Mutability and heap allocation abstraction
+
+L4 introduces Mutable types and lowers the mutable values into explicit store and allocate representations.
+If a variable has a mutable type but the initialization is not already heap-allocated, the L4 layer detects this
+and inserts the heap allocation automatically, like so:
+
+The following L4 binding:
+("x", L4.Mutable(oftype=L4.Int()), L4.Immediate(value=1))
+
+is lowered into the following L3 code:
+(
+    "x",
+    Let(
+        bindings=[
+            ("mutableval0", Immediate(value=1)),
+            ("mutable0", Allocate(count=1)),
+        ],
+        body=Begin(
+            effects=[
+                Store(
+                    base=Reference(name="mutable0"),
+                    index=0,
+                    value=Reference(name="mutableval0"),
+                )
+            ],
+            value=Reference(name="mutable0"),
+        ),
+    ),
+)
+L3 allocate, load, and store are used extensively for the heap allocation.
+
+Trying to set an immutable type will fail. For example:
+process_expression(
+    expression=L4.Set(target=L4.Reference(name="a"), index=0, value=L4.Immediate(value=0)),
+    context={"a": L4.Symbol(name="b", payload=L4.Void())},
+    symbols={"b": L4.Int()},
+    fresh=SequentialNameGenerator(),
+)
+Here the variable a is of custom type b and resolves to an immutable int, so the compiler will throw an error warning about the attempt.
+
+Get and set expressions abstract away read and write operations and make it easy to work with data.
+The get and set expressions ensure structural index checks are correct for scalar values and pairs.
+The writes through set expression are checked if the types of the stored value and the value being written match.
+L4’s collection types: pair and list make use of get and set heavily to simplify working with an array of data.
+Pair and list are not just a collection of data; however, through the access expressions of get and set,
+they support type-directed access and update without requring extra back-end level data operations.
+
+For example:
+for a pair p that is (pair bool int)
+(get p 0):
+has type bool
+(get p 1):
+has type int
+
+## Loops and sequencing
+
+L4 has while and for loops that work with a controlled sequencing of recursive letrecs for L3 conversion.
+The for loop creates an internal counter to achieve this, while the while loop works with a periodic check of a given expression that resolves into a bool type.
+Loop construction makes use of sequencing and the introduced type-safe mutability, along with the recursion, to achieve
+loop behavior without L3 side back-end support.
+
+For example, a for loop translation looks like so in L4:
+L4.Program(
+    definitions=[
+        ("a", L4.Symbol(name="a", payload=L4.Symbol(name="b", payload=L4.Void())), L4.Immediate(value=None)),
+        ("b", L4.List(typeof=L4.Int()), L4.NewList(size=2, typeof=L4.Int())),
+    ],
+    body=L4.For(times=1, run=L4.Bunch(expressions=[L4.Get(target=L4.Reference(name="b"), index=1), L4.Empty()])),
+)
+    
+The lowered version in L3 looks like so:
+
+Program(
+    parameters=[],
+    body=Let(
+        bindings=[
+            ("a", Immediate( value=0)),
+            (
+                "b",
+                Let(
+                    bindings=[("list0", Allocate(count=2))],
+                    body=Begin(
+                        effects=[
+                            Store(
+                                base=Reference( name="list0"),
+                                index=0,
+                                value=Immediate( value=0),
+                            ),
+                            Store(
+                                base=Reference(name="list0"),
+                                index=1,
+                                value=Immediate( value=0),
+                            ),
+                        ],
+                        value=Reference( name="list0"),
+                    ),
+                ),
+            ),
+        ],
+        body=LetRec(
+            bindings=[
+                (
+                    "for_counter0",
+                    Let(
+                        bindings=[
+                            ("mutableval0", Immediate( value=1)),
+                            ("mutable0", Allocate( count=1)),
+                        ],
+                        body=Begin(
+                            effects=[
+                                Store(
+                                    base=Reference( name="mutable0"),
+                                    index=0,
+                                    value=Reference( name="mutableval0"),
+                                )
+                            ],
+                            value=Reference( name="mutable0"),
+                        ),
+                    ),
+                ),
+                (
+                    "for0",
+                    Abstract(
+                        parameters=[],
+                        body=Branch(
+                            operator="==",
+                            left=Immediate(value=1),
+                            right=Branch(
+                                operator="<",
+                                left=Immediate( value=0),
+                                right=Load(
+                                   base=Reference( name="for_counter0"), index=0
+                                ),
+                                consequent=Immediate( value=1),
+                                otherwise=Immediate( value=0),
+                            ),
+                            consequent=Begin(
+                                effects=[
+                                    Store(
+                                        base=Reference( name="for_counter0"),
+                                        index=0,
+                                        value=Primitive(
+                                            operator="-",
+                                            left=Load(
+                                                base=Reference( name="for_counter0"),
+                                                index=0,
+                                            ),
+                                            right=Immediate( value=1),
+                                        ),
+                                    ),
+                                    Begin(
+                                        effects=[
+                                            Load( base=Reference( name="b"), index=1)
+                                        ],
+                                        value=Immediate( value=0),
+                                    ),
+                                ],
+                                value=Apply(
+                                   target=Reference( name="for0"), arguments=[]
+                                ),
+                            ),
+                            otherwise=Immediate( value=0),
+                        ),
+                    ),
+                ),
+            ],
+            body=Apply( target=Reference( name="for0"), arguments=[]),
+        ),
+    ),
+)
+
+Heap allocations and internal for_counter0 variable are used in L3 version to keep track correctly.
+
+Sequencing expression is a bunch; it is simply a collection of expressions, but its type is the type of the last expression.
+Sequencing makes it easy to reason about the code by creating bigger bodies, unlike the never-ending chaining structure of L3.
+For example, the return type of bunch will be void if we perform a set operation at the end.
+
 ## L5 (Ruixiang Jiang)
 
 L5 is implemented as a high-level front end on top of L4. The backend does not need to understand classes, inheritance, switch, foreach, or short-circuit operators directly. Instead, L5 introduces new AST nodes and then lowers them into existing L4 constructs.
