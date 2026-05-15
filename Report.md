@@ -2,6 +2,8 @@
 
 *Team members: Dogukan Avci, Ruixiang Jiang (Graduate Group)*
 
+Link: https://github.com/RuixiangJiang/471c/tree/project
+
 ## Overview
 
 This proposal describes minor and major language extensions. Two layers are newly implemented, L4 and L5. The major extension for L4 and L5 are static type implementation and Java-type class implementation, respectively.
@@ -31,12 +33,15 @@ This is a strong point, since the L3 backend did not require any extra workload 
 ## Overview
 
 The main pipeline operation of L4 to L3 conversion goes like so:
+```text
 L4 program ->
 Type checking ->
 Lowering and translation ->
 L3 program
+```
 
 For example:
+```text
 L4.While(
     condition=L4.Operation(
         operator="<",
@@ -69,9 +74,10 @@ L4.While(
         ]
     )
 )
+```
 This code iterates 5 times and assigns the list l at index 2 with new pairs it allocates. The pairs are composed of a boolean and a function.
 This L4 expression lowers into L3 with the following form:
-
+```text
 LetRec(
   bindings=[
       (
@@ -174,11 +180,13 @@ LetRec(
   ],
   body=Apply(target=Reference(name="while0"), arguments=[])
 )
-
+```
 ## Types
 
 L4 has the following types:
+```text
 Mutable | Int | Bool | FuncType | List | Pair | Symbol | Void
+```
 
 -Int, Bool, Void are primitive (concrete) types
 -FuncType represents the function signatures with the type of each parameter and the return type of the function
@@ -247,13 +255,14 @@ This is only valid if x’s type has a mutable wrapper.
 
 The custom type (Symbol) also resolves to a concrete type before going through the check:
 For example, for the given symbol context:
-
+```text
 symbols = {
     "T": L4.Int(),
 }
+```
 
 Following assertions both pass:
-
+```text
 assert resolve_type(
     L4.Symbol(name="T", payload=L4.Bool()),
     symbols=symbols,
@@ -263,6 +272,7 @@ assert resolve_type(
     L4.Symbol(name="X", payload=L4.Int()),
     symbols=symbols,
 ) == L4.Int()
+```
 Payload section here is the fallback type when the symbol does not exist, so for the second example
 the X symbol will fail to resolve and the payload type will be used as the fallback type and pass the check.
 
@@ -297,9 +307,12 @@ If a variable has a mutable type but the initialization is not already heap-allo
 and inserts the heap allocation automatically, like so:
 
 The following L4 binding:
+```text
 ("x", L4.Mutable(oftype=L4.Int()), L4.Immediate(value=1))
+```
 
 is lowered into the following L3 code:
+```text
 (
     "x",
     Let(
@@ -319,15 +332,18 @@ is lowered into the following L3 code:
         ),
     ),
 )
+```
 L3 allocate, load, and store are used extensively for the heap allocation.
 
 Trying to set an immutable type will fail. For example:
+```text
 process_expression(
     expression=L4.Set(target=L4.Reference(name="a"), index=0, value=L4.Immediate(value=0)),
     context={"a": L4.Symbol(name="b", payload=L4.Void())},
     symbols={"b": L4.Int()},
     fresh=SequentialNameGenerator(),
 )
+```
 Here the variable a is of custom type b and resolves to an immutable int, so the compiler will throw an error warning about the attempt.
 
 Get and set expressions abstract away read and write operations and make it easy to work with data.
@@ -352,6 +368,7 @@ Loop construction makes use of sequencing and the introduced type-safe mutabilit
 loop behavior without L3 side back-end support.
 
 For example, a for loop translation looks like so in L4:
+```text
 L4.Program(
     definitions=[
         ("a", L4.Symbol(name="a", payload=L4.Symbol(name="b", payload=L4.Void())), L4.Immediate(value=None)),
@@ -359,9 +376,9 @@ L4.Program(
     ],
     body=L4.For(times=1, run=L4.Bunch(expressions=[L4.Get(target=L4.Reference(name="b"), index=1), L4.Empty()])),
 )
-    
+```    
 The lowered version in L3 looks like so:
-
+```text
 Program(
     parameters=[],
     body=Let(
@@ -460,12 +477,18 @@ Program(
         ),
     ),
 )
-
+```
 Heap allocations and internal for_counter0 variable are used in L3 version to keep track correctly.
 
 Sequencing expression is a bunch; it is simply a collection of expressions, but its type is the type of the last expression.
 Sequencing makes it easy to reason about the code by creating bigger bodies, unlike the never-ending chaining structure of L3.
 For example, the return type of bunch will be void if we perform a set operation at the end.
+
+## Reflection
+
+The course and the project provided deep exposure to the detailed planning and structures of compiler design. 
+Understanding the purpose behind each layer and the trade-off between controlling a larger chunk of the program flow and utilizing the abstractions provided for simpler programming became apparent while implementing the transformations on the backend. I concluded that there is no correct or wrong way to design compilers as long as the overhead, performance, and the abstraction provided are acceptable. 
+The journey solidified my overall inclination towards types, classes, and inheritance in modern compilers because I prefer my interactions with compilers to be as abstracted away as possible, maybe at the cost of performance at times. Ultimately, it was a fun experience and I enjoyed extending the compiler with features I prefer to work with.
 
 ## L5 (Ruixiang Jiang)
 
