@@ -494,6 +494,8 @@ The journey solidified my overall inclination towards types, classes, and inheri
 
 L5 is implemented as a high-level front end on top of L4. The backend does not need to understand classes, inheritance, switch, foreach, or short-circuit operators directly. Instead, L5 introduces new AST nodes and then lowers them into existing L4 constructs.
 
+The current version implements all of things mentioned in the proposal.
+
 ### Overview
 
 The general pipeline is:
@@ -876,3 +878,9 @@ The current override implementation is static, which means there is no runtime v
 
 The type equality is strictly checked. For example, `(def p (class Point)
   (new ColoredPoint))` is not supported.
+
+### Reflection
+
+From this course I briefly learned a detailed path that `source code -> different levels of src/AST -> assembly code`. It's a little different from what I've learnt before, like `source code -> lexical scanner -> parser -> intermediate code generator -> assembly code`. It's my first time to learn that the compilation could contain multiple levels, and adding new features is just like piling up blocks - originally if I wanted to design a compiler, I needed to finish designing all of the features first, and it was hard to add new features.
+
+When I started to design this compiler, thanks to Dugukan's L4, I didn't need to care much about very low-level implementations. For example, I had a `for` loop, type checking stuff, and based on that I could design a class more easily. However, even if I thought overloading is not so different from overriding, I still could not find a proper way to implement overloading, so I just dropped it. Also, I realized that runtime stuff is much more harder than static definitions - it would almost ruin my previous designs. If I want to add runtime tables in the future, I need to re-design the structure of the whole compiler more carefully.
